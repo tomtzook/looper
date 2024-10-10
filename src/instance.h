@@ -26,7 +26,7 @@ private:
     struct loop_data {
     public:
         explicit loop_data(handle handle)
-            : loop(handle, create_poller())
+            : loop(handle)
         {}
 
         loop_impl loop;

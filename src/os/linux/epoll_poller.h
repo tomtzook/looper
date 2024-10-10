@@ -5,7 +5,7 @@
 
 namespace looper::os {
 
-class epoll_poller : linux_resource, public poller {
+class epoll_poller : public poller {
 public:
     epoll_poller();
     ~epoll_poller() override;
@@ -34,6 +34,7 @@ private:
 
     void handle_error();
 
+    os::descriptor m_descriptor;
     void* m_events;
     epoll_event_data m_data;
 };

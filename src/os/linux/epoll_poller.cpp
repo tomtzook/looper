@@ -55,13 +55,14 @@ static event_types native_to_events(uint32_t events) {
 }
 
 epoll_poller::epoll_poller()
-    : linux_resource(create())
+    : m_descriptor(create())
     , m_events(new epoll_event[events_buffer_size])
     , m_data(m_events)
 {}
 
 epoll_poller::~epoll_poller() {
     delete[] reinterpret_cast<epoll_event*>(m_events);
+    ::close(m_descriptor);
 }
 
 void epoll_poller::add(os::descriptor descriptor, event_types events) {
@@ -69,7 +70,7 @@ void epoll_poller::add(os::descriptor descriptor, event_types events) {
     event.events = events_to_native(events);
     event.data.fd = descriptor;
 
-    if (::epoll_ctl(get_descriptor(), EPOLL_CTL_ADD, descriptor, &event)) {
+    if (::epoll_ctl(m_descriptor, EPOLL_CTL_ADD, descriptor, &event)) {
         handle_error();
     }
 }
@@ -79,7 +80,7 @@ void epoll_poller::set(os::descriptor descriptor, event_types events) {
     event.events = events_to_native(events);
     event.data.fd = descriptor;
 
-    if (::epoll_ctl(get_descriptor(), EPOLL_CTL_MOD, descriptor, &event)) {
+    if (::epoll_ctl(m_descriptor, EPOLL_CTL_MOD, descriptor, &event)) {
         handle_error();
     }
 }
@@ -89,7 +90,7 @@ void epoll_poller::remove(os::descriptor descriptor) {
     event.events = 0;
     event.data.fd = descriptor;
 
-    if (::epoll_ctl(get_descriptor(), EPOLL_CTL_DEL, descriptor, &event)) {
+    if (::epoll_ctl(m_descriptor, EPOLL_CTL_DEL, descriptor, &event)) {
         handle_error();
     }
 }
@@ -101,7 +102,7 @@ polled_events epoll_poller::poll(size_t max_events, std::chrono::milliseconds ti
     }
 
     auto events = reinterpret_cast<epoll_event*>(m_events);
-    const auto count = ::epoll_wait(get_descriptor(), events, static_cast<int>(max_events), static_cast<int>(timeout.count()));
+    const auto count = ::epoll_wait(m_descriptor, events, static_cast<int>(max_events), static_cast<int>(timeout.count()));
     if (count < 0) {
         int error = errno;
         if (error == EINTR) {

@@ -13,7 +13,8 @@ using handle_raw = looper::handle;
 static_assert(sizeof(handle_raw) >= sizeof(uint32_t));
 
 enum handle_types : uint8_t {
-    type_loop = 0
+    type_loop = 0,
+    type_resource
 };
 
 struct handle {
@@ -73,7 +74,7 @@ private:
 template<typename type_, size_t capacity_>
 class handle_table {
 public:
-    static_assert(capacity_ < sizeof(uint16_t) * 8);
+    static_assert(capacity_ < UINT16_MAX);
     static constexpr size_t capacity = capacity_ - 1;
 
     struct iterator {

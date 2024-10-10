@@ -4,12 +4,13 @@
 
 namespace looper::os {
 
-class linux_resource : public resource {
+class linux_event : public event {
 public:
-    explicit linux_resource(descriptor descriptor);
-    ~linux_resource() override;
+    linux_event();
+    ~linux_event() override;
 
-    void close();
+    void set() override;
+    void clear() override;
 };
 
 }
