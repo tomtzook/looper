@@ -14,7 +14,9 @@ static_assert(sizeof(handle_raw) >= sizeof(uint32_t));
 
 enum handle_types : uint8_t {
     type_loop = 0,
-    type_resource
+    type_resource,
+    type_event,
+    type_max
 };
 
 struct handle {

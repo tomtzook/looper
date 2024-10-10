@@ -47,5 +47,6 @@ target_include_directories(looper
         PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-add_executable(test1 test1.cpp)
+add_executable(test1 test1.cpp
+        src/instance.h)
 target_link_libraries(test1 looper)

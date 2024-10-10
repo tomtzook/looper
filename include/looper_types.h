@@ -10,6 +10,7 @@ static constexpr handle empty_handle = static_cast<handle>(-1);
 
 using loop = handle;
 using resource = handle;
+using event = handle;
 
 // using timer = handle;
 // using event = handle;
@@ -23,7 +24,8 @@ enum event_type : event_types {
     event_hung = (0x1 << 3)
 };
 
-using resource_callback = std::function<void(loop loop, resource resource, event_types)>;
-using execute_callback = std::function<void(loop loop)>;
+using resource_callback = std::function<void(loop, resource, event_types)>;
+using execute_callback = std::function<void(loop)>;
+using event_callback = std::function<void(loop, event)>;
 
 }

@@ -15,4 +15,9 @@ void run_forever(loop loop);
 void execute_on(loop loop, execute_callback&& callback);
 void execute_on_and_wait(loop loop, execute_callback&& callback);
 
+event create_event(loop loop, event_callback&& callback);
+void destroy_event(loop loop, event event);
+void set_event(loop loop, event event);
+void clear_event(loop loop, event event);
+
 }
