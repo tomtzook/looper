@@ -16,6 +16,7 @@ enum handle_types : uint8_t {
     type_loop = 0,
     type_resource,
     type_event,
+    type_timer,
     type_max
 };
 
@@ -92,7 +93,7 @@ public:
             , m_ptr(ptr)
             , m_index(index) {
 
-            if (!m_ptr[m_index] && m_index < capacity_) {
+            if (!m_ptr[m_index] && m_index < capacity) {
                 iterate_to_next_element();
             }
         }
@@ -125,7 +126,7 @@ public:
         void iterate_to_next_element() {
             do {
                 m_index++;
-            } while (!m_ptr[m_index] && m_index < capacity_);
+            } while (!m_ptr[m_index] && m_index < capacity);
         }
 
         handle_table& m_table;
@@ -203,6 +204,14 @@ public:
         m_count--;
 
         return std::move(data);
+    }
+
+    iterator begin() {
+        return iterator(*this, &m_data[0], 0);
+    }
+
+    iterator end()   {
+        return iterator(*this, &m_data[capacity], capacity);
     }
 
 private:

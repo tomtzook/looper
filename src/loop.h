@@ -9,9 +9,9 @@
 
 #include "util/handles.h"
 #include "poll.h"
-#include "factory.h"
+#include "os/factory.h"
 
-namespace looper {
+namespace looper::impl {
 
 enum class events_update_type {
     override,
@@ -35,43 +35,57 @@ struct resource_data {
     resource_callback callback;
 };
 
-class loop_impl {
-public:
-    explicit loop_impl(loop handle);
-    ~loop_impl() = default;
+struct event_data {
+    explicit event_data(event handle)
+        : handle(handle)
+        , resource(empty_handle)
+        , event_obj(nullptr)
+        , callback()
+    {}
 
-    resource add_resource(std::shared_ptr<os::resource> resource, event_types events, resource_callback&& callback);
-    void remove_resource(resource resource);
-    void request_resource_events(resource resource, event_types events, events_update_type type = events_update_type::override);
+    looper::event handle;
+    looper::resource resource;
+    std::shared_ptr<os::event> event_obj;
+    event_callback callback;
+};
 
-    void execute_later(execute_callback&& callback, bool wait);
+struct timer_data {
+    explicit timer_data(timer handle)
+        : handle(handle)
+        , running(false)
+        , hit(false)
+        , timeout(0)
+        , next_timestamp(0)
+        , callback()
+    {}
 
-    void run_once();
+    looper::timer handle;
+    bool running;
+    bool hit;
+    std::chrono::milliseconds timeout;
+    std::chrono::milliseconds next_timestamp;
+    timer_callback callback;
+};
 
-private:
-    struct update {
-        enum update_type {
-            type_add,
-            type_new_events,
-            type_new_events_add,
-            type_new_events_remove,
-        };
-
-        resource handle;
-        update_type type;
-        event_types events;
+struct update {
+    enum update_type {
+        type_add,
+        type_new_events,
+        type_new_events_add,
+        type_new_events_remove,
     };
 
-    struct execute_request {
-        execute_callback callback;
-    };
+    resource handle;
+    update_type type;
+    event_types events;
+};
 
-    void signal_run();
+struct execute_request {
+    execute_callback callback;
+};
 
-    void process_updates();
-    void process_update(update& update);
-    void process_events(std::unique_lock<std::mutex>& lock, polled_events& events);
-    void execute_requests(std::unique_lock<std::mutex>& lock);
+struct loop_context {
+    explicit loop_context(loop handle);
 
     loop m_handle;
     std::mutex m_mutex;
@@ -79,11 +93,35 @@ private:
     std::chrono::milliseconds m_timeout;
     std::shared_ptr<os::event> m_run_loop_event;
 
+    handles::handle_table<event_data, 64> m_event_table;
+    handles::handle_table<timer_data, 64> m_timer_table;
     handles::handle_table<resource_data, 256> m_resource_table;
     std::unordered_map<os::descriptor, resource_data*> m_descriptor_map;
 
     std::deque<update> m_updates;
     std::deque<execute_request> m_execute_requests;
 };
+
+loop_context* create_loop(loop handle);
+void destroy_loop(loop_context* context);
+
+// event
+event create_event(loop_context* context, event_callback&& callback);
+void destroy_event(loop_context* context, event event);
+void set_event(loop_context* context, event event);
+void clear_event(loop_context* context, event event);
+
+// timer
+timer create_timer(loop_context* context, std::chrono::milliseconds timeout, timer_callback&& callback);
+void destroy_timer(loop_context* context, timer timer);
+void start_timer(loop_context* context, timer timer);
+void stop_timer(loop_context* context, timer timer);
+void reset_timer(loop_context* context, timer timer);
+
+// execute
+void execute_later(loop_context* context, execute_callback&& callback, bool wait);
+
+// run
+void run_once(loop_context* context);
 
 }

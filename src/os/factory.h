@@ -6,9 +6,9 @@
 #include "poll.h"
 
 
-namespace looper {
+namespace looper::os {
 
 std::unique_ptr<poller> create_poller();
-std::shared_ptr<os::event> create_event();
+std::shared_ptr<event> create_event();
 
 }

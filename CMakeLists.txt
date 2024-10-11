@@ -11,7 +11,7 @@ if (NOT DEFINED TRACE_LEVEL)
 endif ()
 if (NOT DEFINED TRACE_SINK)
     if (UNIX)
-        set(TRACE_SINK 1)
+        set(TRACE_SINK 0) # 1
     else ()
         set(TRACE_SINK 0)
     endif ()
@@ -36,17 +36,15 @@ add_library(looper STATIC
         src/os/os.cpp
         src/os/linux/linux.h
         src/os/linux/linux.cpp
-        src/factory.h
+        src/os/factory.h
         src/poll.cpp
         src/os/linux/epoll_poller.cpp
-        src/factory.cpp
-        src/instance.cpp)
+        src/os/factory.cpp)
 target_include_directories(looper
         PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-add_executable(test1 test1.cpp
-        src/instance.h)
+add_executable(test1 test1.cpp)
 target_link_libraries(test1 looper)
