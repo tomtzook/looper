@@ -35,6 +35,16 @@ struct looper_data {
 
 looper_data g_instance;
 
+static impl::loop_context* get_loop(loop loop) {
+    auto data = g_instance.m_loops[loop];
+    return data->m_context;
+}
+
+static impl::loop_context* get_loop_from_handle(handle handle) {
+    handles::handle full(handle);
+    return get_loop(full.parent());
+}
+
 loop create() {
     auto [handle, data] = g_instance.m_loops.allocate_new();
     return handle;
@@ -47,111 +57,111 @@ void destroy(loop loop) {
 }
 
 void run_once(loop loop) {
-    auto data = g_instance.m_loops[loop];
-    impl::run_once(data->m_context);
+    auto context = get_loop(loop);
+    impl::run_once(context);
 }
 
 void run_forever(loop loop) {
-    auto data = g_instance.m_loops[loop];
-    impl::run_forever(data->m_context);
+    auto context = get_loop(loop);
+    impl::run_forever(context);
 }
 
 // execute
 future execute_on(loop loop, std::chrono::milliseconds delay, loop_callback&& callback) {
-    auto data = g_instance.m_loops[loop];
-    auto future = impl::create_future(data->m_context, [callback](looper::loop loop, looper::future future)->void {
+    auto context = get_loop(loop);
+    auto future = impl::create_future(context, [callback](looper::loop loop, looper::future future)->void {
         callback(loop);
 
-        auto data = g_instance.m_loops[loop];
-        impl::destroy_future(data->m_context, future);
+        auto context = get_loop(loop);
+        impl::destroy_future(context, future);
     });
 
-    impl::execute_later(data->m_context, future, delay);
+    impl::execute_later(context, future, delay);
 
     return future;
 }
 
-bool wait_for(loop loop, future future, std::chrono::milliseconds timeout) {
-    auto data = g_instance.m_loops[loop];
-    return impl::wait_for(data->m_context, future, timeout);
+bool wait_for(future future, std::chrono::milliseconds timeout) {
+    auto context = get_loop_from_handle(future);
+    return impl::wait_for(context, future, timeout);
 }
 
 // events
 event create_event(loop loop, event_callback&& callback) {
-    auto data = g_instance.m_loops[loop];
-    return impl::create_event(data->m_context, std::move(callback));
+    auto context = get_loop(loop);
+    return impl::create_event(context, std::move(callback));
 }
 
-void destroy_event(loop loop, event event) {
-    auto data = g_instance.m_loops[loop];
-    impl::destroy_event(data->m_context, event);
+void destroy_event(event event) {
+    auto context = get_loop_from_handle(event);
+    impl::destroy_event(context, event);
 }
 
-void set_event(loop loop, event event) {
-    auto data = g_instance.m_loops[loop];
-    impl::set_event(data->m_context, event);
+void set_event(event event) {
+    auto context = get_loop_from_handle(event);
+    impl::set_event(context, event);
 }
 
-void clear_event(loop loop, event event) {
-    auto data = g_instance.m_loops[loop];
-    impl::clear_event(data->m_context, event);
+void clear_event(event event) {
+    auto context = get_loop_from_handle(event);
+    impl::clear_event(context, event);
 }
 
 // timers
 timer create_timer(loop loop, std::chrono::milliseconds timeout, timer_callback&& callback) {
-    auto data = g_instance.m_loops[loop];
-    return impl::create_timer(data->m_context, timeout, std::move(callback));
+    auto context = get_loop(loop);
+    return impl::create_timer(context, timeout, std::move(callback));
 }
 
-void destroy_timer(loop loop, timer timer) {
-    auto data = g_instance.m_loops[loop];
-    impl::destroy_timer(data->m_context, timer);
+void destroy_timer(timer timer) {
+    auto context = get_loop_from_handle(timer);
+    impl::destroy_timer(context, timer);
 }
 
-void start_timer(loop loop, timer timer) {
-    auto data = g_instance.m_loops[loop];
-    impl::start_timer(data->m_context, timer);
+void start_timer(timer timer) {
+    auto context = get_loop_from_handle(timer);
+    impl::start_timer(context, timer);
 }
 
-void stop_timer(loop loop, timer timer) {
-    auto data = g_instance.m_loops[loop];
-    impl::stop_timer(data->m_context, timer);
+void stop_timer(timer timer) {
+    auto context = get_loop_from_handle(timer);
+    impl::stop_timer(context, timer);
 }
 
-void reset_timer(loop loop, timer timer) {
-    auto data = g_instance.m_loops[loop];
-    impl::reset_timer(data->m_context, timer);
+void reset_timer(timer timer) {
+    auto context = get_loop_from_handle(timer);
+    impl::reset_timer(context, timer);
 }
 
 // tcp
 tcp create_tcp(loop loop) {
-    auto data = g_instance.m_loops[loop];
-    return impl::create_tcp(data->m_context);
+    auto context = get_loop(loop);
+    return impl::create_tcp(context);
 }
 
-void destroy_tcp(loop loop, tcp tcp) {
-    auto data = g_instance.m_loops[loop];
-    impl::destroy_tcp(data->m_context, tcp);
+void destroy_tcp(tcp tcp) {
+    auto context = get_loop_from_handle(tcp);
+    impl::destroy_tcp(context, tcp);
 }
 
-void bind_tcp(loop loop, tcp tcp, uint16_t port) {
-    auto data = g_instance.m_loops[loop];
-    impl::bind_tcp(data->m_context, tcp, port);
+void bind_tcp(tcp tcp, uint16_t port) {
+    auto context = get_loop_from_handle(tcp);
+    impl::bind_tcp(context, tcp, port);
 }
 
-void connect_tcp(loop loop, tcp tcp, std::string_view server_address, uint16_t server_port, tcp_callback&& callback) {
-    auto data = g_instance.m_loops[loop];
-    impl::connect_tcp(data->m_context, tcp, server_address, server_port, std::move(callback));
+void connect_tcp(tcp tcp, std::string_view server_address, uint16_t server_port, tcp_callback&& callback) {
+    auto context = get_loop_from_handle(tcp);
+    impl::connect_tcp(context, tcp, server_address, server_port, std::move(callback));
 }
 
-void start_tcp_read(loop loop, tcp tcp, tcp_read_callback&& callback) {
-    auto data = g_instance.m_loops[loop];
-    impl::start_tcp_read(data->m_context, tcp, std::move(callback));
+void start_tcp_read(tcp tcp, tcp_read_callback&& callback) {
+    auto context = get_loop_from_handle(tcp);
+    impl::start_tcp_read(context, tcp, std::move(callback));
 }
 
-void write_tcp(loop loop, tcp tcp, std::span<const uint8_t> buffer, tcp_callback&& callback) {
-    auto data = g_instance.m_loops[loop];
-    impl::write_tcp(data->m_context, tcp, buffer, std::move(callback));
+void write_tcp(tcp tcp, std::span<const uint8_t> buffer, tcp_callback&& callback) {
+    auto context = get_loop_from_handle(tcp);
+    impl::write_tcp(context, tcp, buffer, std::move(callback));
 }
 
 }
