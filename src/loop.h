@@ -110,6 +110,10 @@ struct loop_context {
     std::shared_ptr<os::event> m_run_loop_event;
     std::condition_variable m_future_executed;
 
+    bool stop;
+    bool executing;
+    std::condition_variable m_run_finished;
+
     handles::handle_table<future_data, 64> m_future_table;
     handles::handle_table<event_data, 64> m_event_table;
     handles::handle_table<timer_data, 64> m_timer_table;
@@ -142,6 +146,7 @@ void execute_later(loop_context* context, future future, std::chrono::millisecon
 bool wait_for(loop_context* context, future future, std::chrono::milliseconds timeout);
 
 // run
-void run_once(loop_context* context);
+bool run_once(loop_context* context);
+void run_forever(loop_context* context);
 
 }

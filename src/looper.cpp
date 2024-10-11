@@ -11,13 +11,17 @@ namespace looper {
 struct loop_data {
     explicit loop_data(loop loop)
         : m_context(impl::create_loop(loop))
+        , m_destroyed(false)
     {}
     ~loop_data() {
-        // todo:
-        impl::destroy_loop(m_context);
+        if (!m_destroyed) {
+            impl::destroy_loop(m_context);
+            m_destroyed = true;
+        }
     }
 
     impl::loop_context* m_context;
+    bool m_destroyed;
 };
 
 struct looper_data {
@@ -37,6 +41,8 @@ loop create() {
 
 void destroy(loop loop) {
     auto data = g_instance.m_loops.release(loop);
+    impl::destroy_loop(data->m_context);
+    data->m_destroyed = true;
 }
 
 void run_once(loop loop) {
@@ -46,8 +52,7 @@ void run_once(loop loop) {
 
 void run_forever(loop loop) {
     auto data = g_instance.m_loops[loop];
-    // todo: need to stop at some point, when
-    // todo: what if someone calls destroy
+    impl::run_forever(data->m_context);
 }
 
 future execute_on(loop loop, std::chrono::milliseconds delay, loop_callback&& callback) {

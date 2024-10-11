@@ -209,6 +209,9 @@ loop_context::loop_context(loop handle)
     , m_timeout(initial_poll_timeout)
     , m_run_loop_event(os::create_event())
     , m_future_executed()
+    , stop(false)
+    , executing(false)
+    , m_run_finished()
     , m_future_table(handles::handle{handle}.index(), handles::type_future)
     , m_event_table(handles::handle{handle}.index(), handles::type_event)
     , m_timer_table(handles::handle{handle}.index(), handles::type_timer)
@@ -228,8 +231,18 @@ loop_context* create_loop(loop handle) {
 }
 
 void destroy_loop(loop_context* context) {
-    // todo: implement
+    std::unique_lock lock(context->m_mutex);
+    context->stop = true;
+    signal_run(context);
 
+    if (context->executing) {
+        context->m_run_finished.wait(lock, [context]()->bool {
+            return !context->executing;
+        });
+    }
+
+    lock.unlock();
+    // todo: there might still be a race here with someone trying to take the lock
     delete context;
 }
 
@@ -420,8 +433,14 @@ bool wait_for(loop_context* context, future future, std::chrono::milliseconds ti
 }
 
 // run
-void run_once(loop_context* context) {
+bool run_once(loop_context* context) {
     std::unique_lock lock(context->m_mutex);
+
+    if (context->stop) {
+        return true;
+    }
+
+    context->executing = true;
 
     process_updates(context);
 
@@ -432,6 +451,20 @@ void run_once(loop_context* context) {
     process_events(context, lock, result);
     process_timers(context, lock);
     process_futures(context, lock);
+
+    context->executing = false;
+    context->m_run_finished.notify_all();
+
+    return context->stop;
+}
+
+void run_forever(loop_context* context) {
+    while (true) {
+        bool finished = run_once(context);
+        if (finished) {
+            break;
+        }
+    }
 }
 
 }
