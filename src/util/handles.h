@@ -17,6 +17,7 @@ enum handle_types : uint8_t {
     type_resource,
     type_event,
     type_timer,
+    type_future,
     type_max
 };
 

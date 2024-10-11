@@ -50,14 +50,23 @@ void run_forever(loop loop) {
     // todo: what if someone calls destroy
 }
 
-void execute_on(loop loop, execute_callback&& callback) {
+future execute_on(loop loop, std::chrono::milliseconds delay, loop_callback&& callback) {
     auto data = g_instance.m_loops[loop];
-    impl::execute_later(data->m_context, std::move(callback), false);
+    auto future = impl::create_future(data->m_context, [callback](looper::loop loop, looper::future future)->void {
+        callback(loop);
+
+        auto data = g_instance.m_loops[loop];
+        impl::destroy_future(data->m_context, future);
+    });
+
+    impl::execute_later(data->m_context, future, delay);
+
+    return future;
 }
 
-void execute_on_and_wait(loop loop, execute_callback&& callback) {
+bool wait_for(loop loop, future future, std::chrono::milliseconds timeout) {
     auto data = g_instance.m_loops[loop];
-    impl::execute_later(data->m_context, std::move(callback), true);
+    return impl::wait_for(data->m_context, future, timeout);
 }
 
 event create_event(loop loop, event_callback&& callback) {

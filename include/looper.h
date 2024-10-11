@@ -14,8 +14,8 @@ void destroy(loop loop);
 void run_once(loop loop);
 void run_forever(loop loop);
 
-void execute_on(loop loop, execute_callback&& callback);
-void execute_on_and_wait(loop loop, execute_callback&& callback);
+future execute_on(loop loop, std::chrono::milliseconds delay, loop_callback&& callback);
+bool wait_for(loop loop, future future, std::chrono::milliseconds timeout);
 
 // events
 event create_event(loop loop, event_callback&& callback);

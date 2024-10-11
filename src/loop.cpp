@@ -14,7 +14,7 @@ static constexpr auto min_poll_timeout = std::chrono::milliseconds(100);
 
 static std::chrono::milliseconds time_now() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now().time_since_epoch());
+            std::chrono::steady_clock::now().time_since_epoch());
 }
 
 static void signal_run(loop_context* context) {
@@ -168,21 +168,37 @@ static void process_timers(loop_context* context, std::unique_lock<std::mutex>& 
     }
 }
 
-static void execute_requests(loop_context* context, std::unique_lock<std::mutex>& lock) {
-    while (!context->m_execute_requests.empty()) {
-        auto& request = context->m_execute_requests.front();
+static void process_futures(loop_context* context, std::unique_lock<std::mutex>& lock) {
+    std::vector<future> to_remove;
+    const auto now = time_now();
+
+    for (auto [handle, data] : context->m_future_table) {
+        if (data.remove) {
+            to_remove.push_back(handle);
+            continue;
+        }
+
+        if (data.finished || data.execute_time > now) {
+            continue;
+        }
+
+        data.finished = true;
 
         lock.unlock();
         try {
-            request.callback(context->m_handle);
+            data.callback(context->m_handle, data.handle);
         } catch (const std::exception& e) {
-            looper_trace_error(log_module, "Error in request callback: what=%s", e.what());
+            looper_trace_error(log_module, "Error in future callback: what=%s", e.what());
         } catch (...) {
-            looper_trace_error(log_module, "Error in request callback: unknown");
+            looper_trace_error(log_module, "Error in future callback: unknown");
         }
         lock.lock();
+    }
 
-        context->m_execute_requests.pop_front();
+    context->m_future_executed.notify_all();
+
+    for (auto handle : to_remove) {
+        context->m_future_table.release(handle);
     }
 }
 
@@ -192,12 +208,13 @@ loop_context::loop_context(loop handle)
     , m_poller(os::create_poller())
     , m_timeout(initial_poll_timeout)
     , m_run_loop_event(os::create_event())
+    , m_future_executed()
+    , m_future_table(handles::handle{handle}.index(), handles::type_future)
     , m_event_table(handles::handle{handle}.index(), handles::type_event)
     , m_timer_table(handles::handle{handle}.index(), handles::type_timer)
     , m_resource_table(handles::handle{handle}.index(), handles::type_resource)
     , m_descriptor_map()
     , m_updates()
-    , m_execute_requests()
 {}
 
 loop_context* create_loop(loop handle) {
@@ -227,7 +244,7 @@ event create_event(loop_context* context, event_callback&& callback) {
     data->callback = std::move(callback);
 
     // todo: on failure of add_resource we will have the event in the table
-    auto resource_callback = [context, handle](looper::loop loop, looper::resource resource, event_types events)->void {
+    auto resource_callback = [context, handle](looper::loop loop, looper::impl::resource resource, event_types events)->void {
         std::unique_lock lock(context->m_mutex);
         if (!context->m_event_table.has(handle)) {
             return;
@@ -306,6 +323,8 @@ timer create_timer(loop_context* context, std::chrono::milliseconds timeout, tim
 void destroy_timer(loop_context* context, timer timer) {
     std::unique_lock lock(context->m_mutex);
 
+    // todo: find new smallest timeout
+
     // let the loop delete this to prevent sync problems with callbacks
     auto data = context->m_timer_table[timer];
     data->timeout = std::chrono::milliseconds(0);
@@ -337,18 +356,67 @@ void reset_timer(loop_context* context, timer timer) {
 }
 
 // execute
-void execute_later(loop_context* context, execute_callback&& callback, bool wait) {
+future create_future(loop_context* context, future_callback&& callback) {
     std::unique_lock lock(context->m_mutex);
 
-    execute_request request{};
-    request.callback = std::move(callback);
-    context->m_execute_requests.push_back(request);
+    auto [handle, data] = context->m_future_table.allocate_new();
+    data->finished = true;
+    data->remove = false;
+    data->execute_time = std::chrono::milliseconds(0);
+    data->callback = std::move(callback);
 
-    signal_run(context);
+    return handle;
+}
 
-    if (wait) {
-        // todo: wait for run
+void destroy_future(loop_context* context, future future) {
+    std::unique_lock lock(context->m_mutex);
+
+    auto data = context->m_future_table[future];
+    data->remove = true;
+}
+
+void execute_later(loop_context* context, future future, std::chrono::milliseconds delay) {
+    std::unique_lock lock(context->m_mutex);
+
+    if (delay.count() != 0 && delay < min_poll_timeout) {
+        throw std::runtime_error("timer timeout too small");
     }
+
+    // todo: find new smallest timeout when finished
+    auto data = context->m_future_table[future];
+    data->execute_time = time_now() + delay;
+    data->finished = false;
+
+    if (delay.count() < 1) {
+        signal_run(context);
+    }
+}
+
+bool wait_for(loop_context* context, future future, std::chrono::milliseconds timeout) {
+    std::unique_lock lock(context->m_mutex);
+
+    if (!context->m_future_table.has(future)) {
+        // in case someone is waiting on a removed future because of the race with the callback which removed it
+        return false;
+    }
+
+    auto data = context->m_future_table[future];
+    if (data->finished) {
+        return false;
+    }
+
+    return !context->m_future_executed.wait_for(lock, timeout, [context, future]()->bool {
+        if (!context->m_future_table.has(future)) {
+            return true;
+        }
+
+        auto data = context->m_future_table[future];
+        if (data->finished || data->remove) {
+            return true;
+        }
+
+        return false;
+    });
 }
 
 // run
@@ -363,7 +431,7 @@ void run_once(loop_context* context) {
 
     process_events(context, lock, result);
     process_timers(context, lock);
-    execute_requests(context, lock);
+    process_futures(context, lock);
 }
 
 }

@@ -4,6 +4,7 @@
 #include <deque>
 #include <mutex>
 #include <unordered_map>
+#include <condition_variable>
 
 #include <looper_types.h>
 
@@ -18,6 +19,9 @@ enum class events_update_type {
     append,
     remove
 };
+
+using resource = handle;
+using resource_callback = std::function<void(loop, resource, event_types)>;
 
 struct resource_data {
     explicit resource_data(resource handle)
@@ -44,7 +48,7 @@ struct event_data {
     {}
 
     looper::event handle;
-    looper::resource resource;
+    looper::impl::resource resource;
     std::shared_ptr<os::event> event_obj;
     event_callback callback;
 };
@@ -67,6 +71,22 @@ struct timer_data {
     timer_callback callback;
 };
 
+struct future_data {
+    explicit future_data(future handle)
+        : handle(handle)
+        , finished(true)
+        , remove(false)
+        , execute_time(0)
+        , callback()
+    {}
+
+    future handle;
+    bool finished;
+    bool remove;
+    std::chrono::milliseconds execute_time;
+    future_callback callback;
+};
+
 struct update {
     enum update_type {
         type_add,
@@ -80,10 +100,6 @@ struct update {
     event_types events;
 };
 
-struct execute_request {
-    execute_callback callback;
-};
-
 struct loop_context {
     explicit loop_context(loop handle);
 
@@ -92,14 +108,15 @@ struct loop_context {
     std::unique_ptr<poller> m_poller;
     std::chrono::milliseconds m_timeout;
     std::shared_ptr<os::event> m_run_loop_event;
+    std::condition_variable m_future_executed;
 
+    handles::handle_table<future_data, 64> m_future_table;
     handles::handle_table<event_data, 64> m_event_table;
     handles::handle_table<timer_data, 64> m_timer_table;
     handles::handle_table<resource_data, 256> m_resource_table;
     std::unordered_map<os::descriptor, resource_data*> m_descriptor_map;
 
     std::deque<update> m_updates;
-    std::deque<execute_request> m_execute_requests;
 };
 
 loop_context* create_loop(loop handle);
@@ -119,7 +136,10 @@ void stop_timer(loop_context* context, timer timer);
 void reset_timer(loop_context* context, timer timer);
 
 // execute
-void execute_later(loop_context* context, execute_callback&& callback, bool wait);
+future create_future(loop_context* context, future_callback&& callback);
+void destroy_future(loop_context* context, future future);
+void execute_later(loop_context* context, future future, std::chrono::milliseconds delay);
+bool wait_for(loop_context* context, future future, std::chrono::milliseconds timeout);
 
 // run
 void run_once(loop_context* context);
