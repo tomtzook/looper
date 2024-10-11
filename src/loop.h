@@ -5,6 +5,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <condition_variable>
+#include <span>
 
 #include <looper_types.h>
 
@@ -87,6 +88,36 @@ struct future_data {
     future_callback callback;
 };
 
+struct tcp_data {
+    enum class state {
+        init,
+        errored,
+        open,
+        connecting,
+        connected
+    };
+
+    explicit tcp_data(tcp handle)
+        : handle(handle)
+        , resource(empty_handle)
+        , state(state::init)
+        , write_pending(false)
+        , socket_obj()
+        , connect_callback()
+        , read_callback()
+        , write_callback()
+    {}
+
+    tcp handle;
+    looper::impl::resource resource;
+    state state;
+    bool write_pending;
+    std::shared_ptr<os::tcp_socket> socket_obj;
+    tcp_callback connect_callback;
+    tcp_read_callback read_callback;
+    tcp_callback write_callback;
+};
+
 struct update {
     enum update_type {
         type_add,
@@ -117,10 +148,13 @@ struct loop_context {
     handles::handle_table<future_data, 64> m_future_table;
     handles::handle_table<event_data, 64> m_event_table;
     handles::handle_table<timer_data, 64> m_timer_table;
+    handles::handle_table<tcp_data, 64> m_tcp_table;
     handles::handle_table<resource_data, 256> m_resource_table;
     std::unordered_map<os::descriptor, resource_data*> m_descriptor_map;
 
     std::deque<update> m_updates;
+
+    uint8_t m_read_buffer[2048];
 };
 
 loop_context* create_loop(loop handle);
@@ -144,6 +178,14 @@ future create_future(loop_context* context, future_callback&& callback);
 void destroy_future(loop_context* context, future future);
 void execute_later(loop_context* context, future future, std::chrono::milliseconds delay);
 bool wait_for(loop_context* context, future future, std::chrono::milliseconds timeout);
+
+// tcp
+tcp create_tcp(loop_context* context);
+void destroy_tcp(loop_context* context, tcp tcp);
+void bind_tcp(loop_context* context, tcp tcp, uint16_t port);
+void connect_tcp(loop_context* context, tcp tcp, std::string_view server_address, uint16_t server_port, tcp_callback&& callback);
+void start_tcp_read(loop_context* context, tcp tcp, tcp_read_callback&& callback);
+void write_tcp(loop_context* context, tcp tcp, std::span<const uint8_t> buffer, tcp_callback&& callback);
 
 // run
 bool run_once(loop_context* context);

@@ -39,7 +39,11 @@ add_library(looper STATIC
         src/os/factory.h
         src/poll.cpp
         src/os/linux/epoll_poller.cpp
-        src/os/factory.cpp)
+        src/os/factory.cpp
+        include/looper_tcp.h
+        src/os/linux/socket.h
+        src/os/linux/socket.cpp
+        src/os/except.h)
 target_include_directories(looper
         PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include

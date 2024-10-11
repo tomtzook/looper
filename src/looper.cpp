@@ -1,5 +1,6 @@
 
 #include <looper.h>
+#include <looper_tcp.h>
 
 #include "util/handles.h"
 #include "loop.h"
@@ -55,6 +56,7 @@ void run_forever(loop loop) {
     impl::run_forever(data->m_context);
 }
 
+// execute
 future execute_on(loop loop, std::chrono::milliseconds delay, loop_callback&& callback) {
     auto data = g_instance.m_loops[loop];
     auto future = impl::create_future(data->m_context, [callback](looper::loop loop, looper::future future)->void {
@@ -74,6 +76,7 @@ bool wait_for(loop loop, future future, std::chrono::milliseconds timeout) {
     return impl::wait_for(data->m_context, future, timeout);
 }
 
+// events
 event create_event(loop loop, event_callback&& callback) {
     auto data = g_instance.m_loops[loop];
     return impl::create_event(data->m_context, std::move(callback));
@@ -94,6 +97,7 @@ void clear_event(loop loop, event event) {
     impl::clear_event(data->m_context, event);
 }
 
+// timers
 timer create_timer(loop loop, std::chrono::milliseconds timeout, timer_callback&& callback) {
     auto data = g_instance.m_loops[loop];
     return impl::create_timer(data->m_context, timeout, std::move(callback));
@@ -117,6 +121,37 @@ void stop_timer(loop loop, timer timer) {
 void reset_timer(loop loop, timer timer) {
     auto data = g_instance.m_loops[loop];
     impl::reset_timer(data->m_context, timer);
+}
+
+// tcp
+tcp create_tcp(loop loop) {
+    auto data = g_instance.m_loops[loop];
+    return impl::create_tcp(data->m_context);
+}
+
+void destroy_tcp(loop loop, tcp tcp) {
+    auto data = g_instance.m_loops[loop];
+    impl::destroy_tcp(data->m_context, tcp);
+}
+
+void bind_tcp(loop loop, tcp tcp, uint16_t port) {
+    auto data = g_instance.m_loops[loop];
+    impl::bind_tcp(data->m_context, tcp, port);
+}
+
+void connect_tcp(loop loop, tcp tcp, std::string_view server_address, uint16_t server_port, tcp_callback&& callback) {
+    auto data = g_instance.m_loops[loop];
+    impl::connect_tcp(data->m_context, tcp, server_address, server_port, std::move(callback));
+}
+
+void start_tcp_read(loop loop, tcp tcp, tcp_read_callback&& callback) {
+    auto data = g_instance.m_loops[loop];
+    impl::start_tcp_read(data->m_context, tcp, std::move(callback));
+}
+
+void write_tcp(loop loop, tcp tcp, std::span<const uint8_t> buffer, tcp_callback&& callback) {
+    auto data = g_instance.m_loops[loop];
+    impl::write_tcp(data->m_context, tcp, buffer, std::move(callback));
 }
 
 }

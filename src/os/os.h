@@ -6,31 +6,34 @@ namespace looper::os {
 
 using descriptor = int;
 
-enum class resource_type {
-    none,
-    event
-};
-
 class resource {
 public:
-    resource(descriptor descriptor, resource_type type);
     virtual ~resource() = default;
 
-    [[nodiscard]] descriptor get_descriptor() const;
-    [[nodiscard]] resource_type get_type() const;
-
-private:
-    descriptor m_descriptor;
-    resource_type m_type;
+    [[nodiscard]] virtual descriptor get_descriptor() const = 0;
 };
 
 class event : public resource {
 public:
-    explicit event(descriptor descriptor);
     virtual ~event() override = default;
 
     virtual void set() = 0;
     virtual void clear() = 0;
+};
+
+class tcp_socket : public resource {
+public:
+    virtual ~tcp_socket() override = default;
+
+    virtual void close() = 0;
+
+    virtual void bind(uint16_t port) = 0;
+
+    virtual bool connect(std::string_view ip, uint16_t port) = 0;
+    virtual void finalize_connect() = 0;
+
+    virtual size_t read(uint8_t* buffer, size_t buffer_size) = 0;
+    virtual size_t write(const uint8_t* buffer, size_t size) = 0;
 };
 
 }

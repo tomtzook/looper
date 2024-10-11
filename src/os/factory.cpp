@@ -14,4 +14,8 @@ std::shared_ptr<event> create_event() {
     return std::make_shared<linux_event>();
 }
 
+std::shared_ptr<tcp_socket> create_tcp_socket() {
+    return std::make_shared<linux_tcp_socket>();
+}
+
 }
