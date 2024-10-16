@@ -4,90 +4,32 @@
 #include "os/except.h"
 #include "os/factory.h"
 #include "loop.h"
+#include "loop_internal.h"
 
 namespace looper::impl {
 
-#define log_module "loop"
+#define log_module loop_log_module
 
 static constexpr size_t max_events_for_process = 20;
 static constexpr auto initial_poll_timeout = std::chrono::milliseconds(1000);
 static constexpr auto min_poll_timeout = std::chrono::milliseconds(100);
 
-template<typename _mutex, typename... args_>
-static void invoke_func(std::unique_lock<_mutex>& lock, const char* name, const std::function<void(args_...)>& ref, args_... args) {
-    if (ref != nullptr) {
-        lock.unlock();
-        try {
-            ref(args...);
-        } catch (const std::exception& e) {
-            looper_trace_error(log_module, "Error while invoking func %s: what=%s", name, e.what());
-        } catch (...) {
-            looper_trace_error(log_module, "Error while invoking func %s: unknown", name);
-        }
-        lock.lock();
-    }
+static void run_signal_resource_handler(loop_context* context, looper::impl::resource resource, handle handle, event_types events) {
+    context->m_run_loop_event->clear();
 }
 
-static std::chrono::milliseconds time_now() {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now().time_since_epoch());
-}
-
-static void signal_run(loop_context* context) {
-    context->m_run_loop_event->set();
-}
-
-static resource add_resource(loop_context* context, std::shared_ptr<os::resource> resource, event_types events, resource_callback&& callback) {
-    const auto descriptor = resource->get_descriptor();
-
-    auto it = context->m_descriptor_map.find(descriptor);
-    if (it != context->m_descriptor_map.end()) {
-        throw std::runtime_error("resource already added");
+static void event_resource_handler(loop_context* context, looper::impl::resource resource, handle handle, event_types events) {
+    std::unique_lock lock(context->m_mutex);
+    if (!context->m_event_table.has(handle)) {
+        return;
     }
 
-    auto [handle, data] = context->m_resource_table.allocate_new();
-    data->resource_obj = std::move(resource);
-    data->descriptor = descriptor;
-    data->events = 0;
-    data->callback = std::move(callback);
-
-    context->m_descriptor_map.emplace(descriptor, data);
-    context->m_updates.push_back({handle, update::type_add, events});
-
-    signal_run(context);
-
-    return handle;
-}
-
-static void remove_resource(loop_context* context, resource resource) {
-    auto data = context->m_resource_table.release(resource);
-
-    context->m_descriptor_map.erase(data->descriptor);
-    context->m_poller->remove(data->descriptor);
-
-    signal_run(context);
-}
-
-static void request_resource_events(loop_context* context, resource resource, event_types events, events_update_type type = events_update_type::override) {
-    auto data = context->m_resource_table[resource];
-
-    update::update_type update_type;
-    switch (type) {
-        case events_update_type::override:
-            update_type = update::type_new_events;
-            break;
-        case events_update_type::append:
-            update_type = update::type_new_events_add;
-            break;
-        case events_update_type::remove:
-            update_type = update::type_new_events_remove;
-            break;
-        default:
-            throw std::runtime_error("unsupported event type");
+    auto event_data = context->m_event_table[handle];
+    if (event_data->resource == empty_handle) {
+        return;
     }
 
-    context->m_updates.push_back({data->handle, update_type, events});
-    signal_run(context);
+    invoke_func(lock, "event_callback", event_data->callback, context->m_handle, event_data->handle);
 }
 
 static void process_update(loop_context* context, update& update) {
@@ -140,7 +82,8 @@ static void process_events(loop_context* context, std::unique_lock<std::mutex>& 
             continue;
         }
 
-        invoke_func(lock, "resource_callback", data->callback, context->m_handle, data->handle, adjusted_flags);
+        invoke_func(lock, "resource_callback",
+                    data->callback, context, data->our_handle, data->external_handle, adjusted_flags);
     }
 }
 
@@ -218,9 +161,7 @@ loop_context* create_loop(loop handle) {
     looper_trace_info(log_module, "creating looper");
 
     auto context = new loop_context(handle);
-    add_resource(context, context->m_run_loop_event, event_in, [context](loop loop, resource resource, event_types events)->void {
-        context->m_run_loop_event->clear();
-    });
+    add_resource(context, context->m_run_loop_event, event_in, run_signal_resource_handler);
     // todo: handle release on failure
 
     return context;
@@ -257,23 +198,10 @@ event create_event(loop_context* context, event_callback&& callback) {
 
     looper_trace_info(log_module, "creating new event: handle=%lu, fd=%d", handle, event->get_descriptor());
 
-    // todo: on failure of add_resource we will have the event in the table
-    auto resource_callback = [context, handle](looper::loop loop, looper::impl::resource resource, event_types events)->void {
-        std::unique_lock lock(context->m_mutex);
-        if (!context->m_event_table.has(handle)) {
-            return;
-        }
-
-        auto event_data = context->m_event_table[handle];
-        if (event_data->resource == empty_handle) {
-            return;
-        }
-
-        invoke_func(lock, "event_callback", event_data->callback, context->m_handle, event_data->handle);
-    };
-
-    auto resource = add_resource(context, event, event_in, resource_callback);
+    auto resource = add_resource(context, event, event_in, event_resource_handler, handle);
     data->resource = resource;
+
+    context->m_event_table.assign(handle, std::move(data));
 
     return handle;
 }
@@ -322,6 +250,8 @@ timer create_timer(loop_context* context, std::chrono::milliseconds timeout, tim
     data->callback = std::move(callback);
 
     looper_trace_info(log_module, "creating new timer: handle=%lu, timeout=%ul", handle, timeout.count());
+
+    context->m_timer_table.assign(handle, std::move(data));
 
     if (context->m_timeout > timeout) {
         context->m_timeout = timeout;
@@ -387,6 +317,8 @@ future create_future(loop_context* context, future_callback&& callback) {
 
     looper_trace_info(log_module, "creating future: handle=%lu", handle);
 
+    context->m_future_table.assign(handle, std::move(data));
+
     return handle;
 }
 
@@ -447,227 +379,6 @@ bool wait_for(loop_context* context, future future, std::chrono::milliseconds ti
 
         return false;
     });
-}
-
-// tcp
-tcp create_tcp(loop_context* context) {
-    std::unique_lock lock(context->m_mutex);
-
-    auto socket = os::create_tcp_socket();
-
-    auto [handle, data] = context->m_tcp_table.allocate_new();
-    data->socket_obj = socket;
-    data->state = tcp_data::state::init;
-
-    looper_trace_info(log_module, "creating tcp: handle=%lu", handle);
-
-    // todo: on failure of add_resource we will have the event in the table
-    auto resource_callback = [context, handle](looper::loop loop, looper::impl::resource resource, event_types events)->void {
-        std::unique_lock lock(context->m_mutex);
-        if (!context->m_tcp_table.has(handle)) {
-            return;
-        }
-
-        auto tcp_data = context->m_tcp_table[handle];
-        if (tcp_data->resource == empty_handle) {
-            return;
-        }
-
-        switch (tcp_data->state) {
-            case tcp_data::state::connecting: {
-                if ((events & event_out) != 0) {
-                    // finish connect
-                    looper::error error = 0;
-                    try {
-                        tcp_data->socket_obj->finalize_connect();
-                        tcp_data->state = tcp_data::state::connected;
-                    } catch (const os_exception& e) {
-                        tcp_data->state = tcp_data::state::errored;
-                        error = e.get_code();
-                    }
-
-                    // todo: clear callbacks and then use
-                    request_resource_events(context, tcp_data->resource, 0, events_update_type::remove);
-                    invoke_func<std::mutex, looper::loop, looper::tcp, looper::error>(
-                            lock,
-                            "tcp_connect_callback",
-                            tcp_data->connect_callback,
-                            context->m_handle,
-                            tcp_data->handle,
-                            error);
-                }
-            }
-            case tcp_data::state::connected: {
-                // todo: handle hung/error events
-                if ((events & event_in) != 0) {
-                    // new data
-                    try {
-                        auto read = tcp_data->socket_obj->read(context->m_read_buffer, sizeof(context->m_read_buffer));
-                        auto span = std::span<const uint8_t>{context->m_read_buffer, read};
-                        invoke_func<std::mutex, looper::loop, looper::tcp, std::span<const uint8_t>, looper::error>(
-                                lock,
-                                "tcp_read_callback",
-                                tcp_data->read_callback,
-                                context->m_handle,
-                                tcp_data->handle,
-                                span,
-                                0);
-                    } catch (const os_exception& e) {
-                        invoke_func<std::mutex, looper::loop, looper::tcp, std::span<const uint8_t>, looper::error>(
-                                lock,
-                                "tcp_read_callback",
-                                tcp_data->read_callback,
-                                context->m_handle,
-                                tcp_data->handle,
-                                std::span<const uint8_t>{},
-                                e.get_code());
-                    } catch (const os::eof_exception& e) {
-                        // todo: pass EOF ERROR CODE
-                        invoke_func<std::mutex, looper::loop, looper::tcp, std::span<const uint8_t>, looper::error>(
-                                lock,
-                                "tcp_read_callback",
-                                tcp_data->read_callback,
-                                context->m_handle,
-                                tcp_data->handle,
-                                std::span<const uint8_t>{},
-                                -1);
-                    }
-                }
-
-                if ((events & event_out) != 0) {
-                     if (tcp_data->write_pending) {
-                         tcp_data->write_pending = false;
-                         invoke_func<std::mutex, looper::loop, looper::tcp, looper::error>(
-                                 lock,
-                                 "tcp_write_callback",
-                                 tcp_data->write_callback,
-                                 context->m_handle,
-                                 tcp_data->handle,
-                                 0);
-                     }
-
-                    request_resource_events(context, tcp_data->resource, event_out, events_update_type::remove);
-                }
-            }
-            default:
-                break;
-        }
-    };
-
-    auto resource = add_resource(context, socket, 0, resource_callback);
-    data->resource = resource;
-    data->state = tcp_data::state::open;
-
-    return handle;
-}
-
-void destroy_tcp(loop_context* context, tcp tcp) {
-    std::unique_lock lock(context->m_mutex);
-
-    auto data = context->m_tcp_table.release(tcp);
-    if (data->resource != empty_handle) {
-        remove_resource(context, data->resource);
-    }
-
-    // todo: race!
-    if (data->socket_obj) {
-        data->socket_obj->close();
-        data->socket_obj.reset();
-    }
-}
-
-void bind_tcp(loop_context* context, tcp tcp, uint16_t port) {
-    std::unique_lock lock(context->m_mutex);
-
-    auto data = context->m_tcp_table[tcp];
-    if (data->state != tcp_data::state::open) {
-        throw std::runtime_error("tcp state invalid for bind");
-    }
-
-    data->socket_obj->bind(port);
-}
-
-void connect_tcp(loop_context* context, tcp tcp, std::string_view server_address, uint16_t server_port, tcp_callback&& callback) {
-    std::unique_lock lock(context->m_mutex);
-
-    auto data = context->m_tcp_table[tcp];
-    if (data->state != tcp_data::state::open) {
-        throw std::runtime_error("tcp state invalid for connect");
-    }
-
-    data->state = tcp_data::state::connecting;
-    try {
-        if (data->socket_obj->connect(server_address, server_port)) {
-            // connection finished
-            data->state = tcp_data::state::connected;
-            invoke_func<std::mutex, looper::loop, looper::tcp, looper::error>(
-                    lock,
-                    "tcp_connect_callback",
-                    callback,
-                    context->m_handle,
-                    data->handle,
-                    0);
-        } else {
-            // wait for connection finish
-            request_resource_events(context, data->resource, event_out, events_update_type::append);
-            data->connect_callback = std::move(callback);
-        }
-    } catch (const os_exception& e) {
-        data->state = tcp_data::state::errored;
-        invoke_func<std::mutex, looper::loop, looper::tcp, looper::error>(
-                lock,
-                "tcp_connect_callback",
-                callback,
-                context->m_handle,
-                data->handle,
-                e.get_code());
-    }
-}
-
-void start_tcp_read(loop_context* context, tcp tcp, tcp_read_callback&& callback) {
-    std::unique_lock lock(context->m_mutex);
-
-    auto data = context->m_tcp_table[tcp];
-    if (data->state != tcp_data::state::connected) {
-        throw std::runtime_error("tcp state invalid for read");
-    }
-
-    data->read_callback = std::move(callback);
-    request_resource_events(context, data->resource, event_in, events_update_type::append);
-}
-
-void write_tcp(loop_context* context, tcp tcp, std::span<const uint8_t> buffer, tcp_callback&& callback) {
-    std::unique_lock lock(context->m_mutex);
-
-    auto data = context->m_tcp_table[tcp];
-    if (data->state != tcp_data::state::connected) {
-        throw std::runtime_error("tcp state invalid for write");
-    }
-
-    if (data->write_pending) {
-        throw std::runtime_error("write already in progress");
-    }
-
-    try {
-        auto written = data->socket_obj->write(buffer.data(), buffer.size());
-        if (written != buffer.size()) {
-            // todo: handle internally
-            throw std::runtime_error("unable to write all buffer! implement solution");
-        }
-
-        request_resource_events(context, data->resource, event_out, events_update_type::append);
-
-        data->write_pending = true;
-        data->write_callback = std::move(callback);
-    } catch (const os_exception& e) {
-        invoke_func<std::mutex, looper::loop, looper::tcp, looper::error>(
-                lock,
-                "tcp_write_callback",
-                data->write_callback,
-                context->m_handle,
-                data->handle,
-                e.get_code());
-    }
 }
 
 // run

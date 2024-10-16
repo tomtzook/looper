@@ -179,7 +179,7 @@ public:
     }
 
     template<typename... arg_>
-    std::pair<handle_raw, type_*> allocate_new(arg_&&... args) {
+    std::pair<handle_raw, std::unique_ptr<type_>> allocate_new(arg_&&... args) {
         const auto spot = find_next_available_spot();
         if (spot < 0) {
             throw no_space_exception();
@@ -189,11 +189,23 @@ public:
         handle handle(m_parent, m_type, index);
         const auto handle_raw = handle.raw();
 
-        m_data[index] = std::make_unique<type_>(handle_raw, args...);
+        auto data = std::make_unique<type_>(handle_raw, args...);
+        return {handle_raw, std::move(data)};
+    }
+
+    std::pair<handle_raw, type_&> assign(handle_raw new_handle, std::unique_ptr<type_>&& ptr) {
+        auto handle = valid_handle_for_us(new_handle);
+        auto index = handle.index();
+
+        if (m_data[index]) {
+            throw no_space_exception();
+        }
+
+        m_data[index] = std::move(ptr);
         m_count++;
 
         auto data = m_data[index].get();
-        return {handle_raw, data};
+        return {handle.raw(), reinterpret_cast<type_&>(*data)};
     }
 
     std::unique_ptr<type_> release(handle_raw handle_raw) {
@@ -228,14 +240,20 @@ private:
     }
 
     handles::handle verify_handle(handle_raw handle_raw) {
+        auto handle = valid_handle_for_us(handle_raw);
+
+        if (!m_data[handle.index()]) {
+            throw no_such_handle_exception(handle_raw);
+        }
+
+        return handle;
+    }
+
+    handles::handle valid_handle_for_us(handle_raw handle_raw) {
         handles::handle handle(handle_raw);
 
         if (handle.parent() != m_parent || handle.type() != m_type || handle.index() >= capacity) {
             throw bad_handle_exception(handle_raw);
-        }
-
-        if (!m_data[handle.index()]) {
-            throw no_such_handle_exception(handle_raw);
         }
 
         return handle;

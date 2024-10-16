@@ -43,7 +43,10 @@ add_library(looper STATIC
         include/looper_tcp.h
         src/os/linux/socket.h
         src/os/linux/socket.cpp
-        src/os/except.h)
+        src/os/except.h
+        src/loop_internal.h
+        src/loop_base.cpp
+        src/loop_tcp.cpp)
 target_include_directories(looper
         PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include

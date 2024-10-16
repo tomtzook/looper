@@ -10,8 +10,8 @@ namespace looper {
 #define log_module "looper"
 
 struct loop_data {
-    explicit loop_data(loop loop)
-        : m_context(impl::create_loop(loop))
+    explicit loop_data(loop handle)
+        : m_context(impl::create_loop(handle))
         , m_destroyed(false)
     {}
     ~loop_data() {
@@ -46,11 +46,15 @@ static impl::loop_context* get_loop_from_handle(handle handle) {
 }
 
 loop create() {
+    // todo: need locking
     auto [handle, data] = g_instance.m_loops.allocate_new();
+    g_instance.m_loops.assign(handle, std::move(data));
+
     return handle;
 }
 
 void destroy(loop loop) {
+    // todo: need proper sync
     auto data = g_instance.m_loops.release(loop);
     impl::destroy_loop(data->m_context);
     data->m_destroyed = true;
@@ -157,6 +161,11 @@ void connect_tcp(tcp tcp, std::string_view server_address, uint16_t server_port,
 void start_tcp_read(tcp tcp, tcp_read_callback&& callback) {
     auto context = get_loop_from_handle(tcp);
     impl::start_tcp_read(context, tcp, std::move(callback));
+}
+
+void stop_tcp_read(tcp tcp) {
+    auto context = get_loop_from_handle(tcp);
+    impl::stop_tcp_read(context, tcp);
 }
 
 void write_tcp(tcp tcp, std::span<const uint8_t> buffer, tcp_callback&& callback) {
