@@ -46,7 +46,9 @@ add_library(looper STATIC
         src/os/except.h
         src/loop_internal.h
         src/loop_base.cpp
-        src/loop_tcp.cpp)
+        src/loop_tcp.cpp
+        src/loop_structs.h
+        src/util/util.h)
 target_include_directories(looper
         PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -55,3 +57,12 @@ target_include_directories(looper
 
 add_executable(test1 test1.cpp)
 target_link_libraries(test1 looper)
+
+add_executable(test2 test2.cpp)
+target_link_libraries(test2 looper)
+
+add_executable(test3 test3.cpp)
+target_link_libraries(test3 looper)
+
+add_executable(test4 test4.cpp)
+target_link_libraries(test4 looper)

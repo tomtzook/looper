@@ -14,7 +14,10 @@ void destroy(loop loop);
 void run_once(loop loop);
 void run_forever(loop loop);
 
-future execute_on(loop loop, std::chrono::milliseconds delay, loop_callback&& callback);
+// futures
+future create_future(loop loop, future_callback&& callback);
+void destroy_future(future future);
+void execute_once(future future, std::chrono::milliseconds delay);
 bool wait_for(future future, std::chrono::milliseconds timeout);
 
 // events
@@ -24,7 +27,7 @@ void set_event(event event);
 void clear_event(event event);
 
 // timers
-timer create_timer(std::chrono::milliseconds timeout, timer_callback&& callback);
+timer create_timer(loop loop, std::chrono::milliseconds timeout, timer_callback&& callback);
 void destroy_timer(timer timer);
 void start_timer(timer timer);
 void stop_timer(timer timer);

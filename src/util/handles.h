@@ -164,18 +164,18 @@ public:
         }
     }
 
-    const type_* operator[](handle_raw handle_raw) const {
+    const type_& operator[](handle_raw handle_raw) const {
         const auto handle = verify_handle(handle_raw);
 
         const auto index = handle.index();
-        return m_data[index].get();
+        return *m_data[index].get();
     }
 
-    type_* operator[](handle_raw handle_raw) {
+    type_& operator[](handle_raw handle_raw) {
         const auto handle = verify_handle(handle_raw);
 
         const auto index = handle.index();
-        return m_data[index].get();
+        return *m_data[index].get();
     }
 
     template<typename... arg_>
@@ -191,6 +191,12 @@ public:
 
         auto data = std::make_unique<type_>(handle_raw, args...);
         return {handle_raw, std::move(data)};
+    }
+
+    template<typename... arg_>
+    std::pair<handle_raw, type_&> assign_new(arg_&&... args) {
+        auto [handle, data] = this->allocate_new(args...);
+        return assign(handle, std::move(data));
     }
 
     std::pair<handle_raw, type_&> assign(handle_raw new_handle, std::unique_ptr<type_>&& ptr) {

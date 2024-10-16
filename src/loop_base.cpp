@@ -3,6 +3,8 @@
 
 namespace looper::impl {
 
+#define log_module loop_log_module
+
 std::chrono::milliseconds time_now() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now().time_since_epoch());
@@ -13,7 +15,8 @@ void signal_run(loop_context* context) {
 }
 
 resource add_resource(loop_context* context, std::shared_ptr<os::resource> resource,
-                      event_types events, resource_callback&& callback, handle external_handle) {
+                      event_types events, resource_callback&& callback,
+                      void* user_ptr) {
     const auto descriptor = resource->get_descriptor();
 
     auto it = context->m_descriptor_map.find(descriptor);
@@ -22,7 +25,7 @@ resource add_resource(loop_context* context, std::shared_ptr<os::resource> resou
     }
 
     auto [handle, data] = context->m_resource_table.allocate_new();
-    data->external_handle = external_handle;
+    data->user_ptr = user_ptr;
     data->resource_obj = std::move(resource);
     data->descriptor = descriptor;
     data->events = 0;
@@ -48,7 +51,7 @@ void remove_resource(loop_context* context, resource resource) {
 }
 
 void request_resource_events(loop_context* context, resource resource, event_types events, events_update_type type) {
-    auto data = context->m_resource_table[resource];
+    auto& data = context->m_resource_table[resource];
 
     update::update_type update_type;
     switch (type) {
@@ -65,7 +68,7 @@ void request_resource_events(loop_context* context, resource resource, event_typ
             throw std::runtime_error("unsupported event type");
     }
 
-    context->m_updates.push_back({data->our_handle, update_type, events});
+    context->m_updates.push_back({data.our_handle, update_type, events});
     signal_run(context);
 }
 
