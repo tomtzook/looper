@@ -19,6 +19,7 @@ enum handle_types : uint8_t {
     type_timer,
     type_future,
     type_tcp,
+    type_tcp_server,
     type_max
 };
 

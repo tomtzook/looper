@@ -122,6 +122,28 @@ static void tcp_resource_handler(loop_context* context, void* ptr, event_types e
     }
 }
 
+static void tcp_server_resource_handler(loop_context* context, void* ptr, event_types events) {
+    std::unique_lock lock(context->m_mutex);
+
+    auto* tcp = reinterpret_cast<tcp_server_data*>(ptr);
+    if (tcp->resource == empty_handle) {
+        return;
+    }
+
+    if ((events & (event_error | event_hung)) != 0) {
+        // hung/error
+        const auto code = tcp->socket_obj->get_internal_error();
+        looper_trace_error(log_module, "tcp hung/error: ptr=0x%x, code=%lu", tcp, code);
+
+        return;
+    }
+
+    if ((events & event_in) != 0) {
+        // new data
+        invoke_func(lock, "tcp_server_callback", tcp->callback, tcp);
+    }
+}
+
 void add_tcp(loop_context* context, tcp_data* tcp) {
     std::unique_lock lock(context->m_mutex);
 
@@ -250,6 +272,26 @@ void write_tcp(loop_context* context, tcp_data* tcp, std::span<const uint8_t> bu
         tcp_data::cause_data cause_data{};
         invoke_func<std::mutex, tcp_data*, tcp_data::cause, tcp_data::cause_data&, looper::error>
             (lock, "tcp_loop_callback", tcp->callback, tcp, tcp_data::cause::write_finished, cause_data, e.get_code());
+    }
+}
+
+void add_tcp_server(loop_context* context, tcp_server_data* tcp) {
+    std::unique_lock lock(context->m_mutex);
+
+    auto resource = add_resource(context, tcp->socket_obj, event_in | event_error | event_hung, tcp_server_resource_handler, tcp);
+    tcp->resource = resource;
+
+    looper_trace_info(log_module, "adding tcp server: ptr=0x%x, resource_handle=%lu", tcp, resource);
+}
+
+void remove_tcp_server(loop_context* context, tcp_server_data* tcp) {
+    std::unique_lock lock(context->m_mutex);
+
+    looper_trace_info(log_module, "removing tcp server: ptr=0x%x, resource_handle=%lu", tcp, tcp->resource);
+
+    if (tcp->resource != empty_handle) {
+        remove_resource(context, tcp->resource);
+        tcp->resource = empty_handle;
     }
 }
 

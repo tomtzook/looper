@@ -33,6 +33,9 @@ void start_tcp_read(loop_context* context, tcp_data* tcp);
 void stop_tcp_read(loop_context* context, tcp_data* tcp);
 void write_tcp(loop_context* context, tcp_data* tcp, std::span<const uint8_t> buffer);
 
+void add_tcp_server(loop_context* context, tcp_server_data* tcp);
+void remove_tcp_server(loop_context* context, tcp_server_data* tcp);
+
 // run
 bool run_once(loop_context* context);
 

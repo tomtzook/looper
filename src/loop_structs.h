@@ -144,4 +144,25 @@ struct tcp_data {
     loop_callback callback;
 };
 
+struct tcp_server_data {
+    using loop_callback = std::function<void(tcp_server_data*)>;
+
+    explicit tcp_server_data(tcp_server handle)
+        : handle(handle)
+        , socket_obj(nullptr)
+        , connect_callback(nullptr)
+        , resource(empty_handle)
+        , callback(nullptr)
+    {}
+
+    tcp_server handle;
+
+    std::shared_ptr<os::tcp_server_socket> socket_obj;
+    tcp_server_callback connect_callback;
+
+    // managed in loop
+    looper::impl::resource resource;
+    loop_callback callback;
+};
+
 }

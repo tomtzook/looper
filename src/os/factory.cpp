@@ -18,4 +18,8 @@ std::shared_ptr<tcp_socket> create_tcp_socket() {
     return std::make_shared<linux_tcp_socket>();
 }
 
+std::shared_ptr<tcp_server_socket> create_tcp_server_socket() {
+    return std::make_shared<linux_tcp_server_socket>();
+}
+
 }

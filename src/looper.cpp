@@ -14,6 +14,8 @@ namespace looper {
 #define log_module "looper"
 
 struct loop_data {
+    static constexpr size_t handle_counts_per_type = 64;
+
     explicit loop_data(loop handle)
         : m_handle(handle)
         , m_context(impl::create_loop())
@@ -24,6 +26,7 @@ struct loop_data {
         , m_timers(handles::handle{handle}.index(), handles::type_timer)
         , m_futures(handles::handle{handle}.index(), handles::type_future)
         , m_tcps(handles::handle{handle}.index(), handles::type_tcp)
+        , m_tcp_servers(handles::handle{handle}.index(), handles::type_tcp_server)
     {}
     ~loop_data() {
         if (!m_destroyed) {
@@ -38,10 +41,11 @@ struct loop_data {
     bool m_destroyed;
 
     std::unique_ptr<std::thread> m_thread;
-    handles::handle_table<impl::event_data, 16> m_events;
-    handles::handle_table<impl::timer_data, 16> m_timers;
-    handles::handle_table<impl::future_data, 16> m_futures;
-    handles::handle_table<impl::tcp_data, 16> m_tcps;
+    handles::handle_table<impl::event_data, handle_counts_per_type> m_events;
+    handles::handle_table<impl::timer_data, handle_counts_per_type> m_timers;
+    handles::handle_table<impl::future_data, handle_counts_per_type> m_futures;
+    handles::handle_table<impl::tcp_data, handle_counts_per_type> m_tcps;
+    handles::handle_table<impl::tcp_server_data, handle_counts_per_type> m_tcp_servers;
 };
 
 struct looper_data {
@@ -52,7 +56,9 @@ struct looper_data {
     handles::handle_table<loop_data, 8> m_loops;
 };
 
-std::mutex g_mutex; // todo: we use this mutex everywhere, could be problematic, limit use. perhaps remove lock from loop layer, how?
+// todo: we use this mutex everywhere, could be problematic, limit use. perhaps remove lock from loop layer, how?
+//  could use some lock-less mechanisms, or spinlocks
+std::mutex g_mutex;
 looper_data g_instance;
 
 static inline std::optional<loop_data*> try_get_loop(loop loop) {
@@ -144,6 +150,11 @@ static void tcp_loop_callback(impl::tcp_data* tcp, impl::tcp_data::cause cause, 
             std::abort();
             break;
     }
+}
+
+static void tcp_server_loop_callback(impl::tcp_server_data* tcp) {
+    auto loop = get_loop_handle(tcp->handle);
+    invoke_func_nolock("tcp_accept_user_callback", tcp->connect_callback, loop, tcp->handle);
 }
 
 loop create() {
@@ -453,6 +464,84 @@ void write_tcp(tcp tcp, std::span<const uint8_t> buffer, tcp_callback&& callback
     auto& tcp_data = data.m_tcps[tcp];
     tcp_data.write_callback = std::move(callback);
     impl::write_tcp(data.m_context, &tcp_data, buffer);
+}
+
+tcp_server create_tcp_server(loop loop) {
+    std::unique_lock lock(g_mutex);
+
+    auto& data = get_loop(loop);
+
+    auto [handle, tcp_data] = data.m_tcp_servers.allocate_new();
+    tcp_data->callback = tcp_server_loop_callback;
+    tcp_data->socket_obj = os::create_tcp_server_socket();
+
+    impl::add_tcp_server(data.m_context, tcp_data.get());
+
+    data.m_tcp_servers.assign(handle, std::move(tcp_data));
+
+    return handle;
+}
+
+void destroy_tcp_server(tcp_server tcp) {
+    std::unique_lock lock(g_mutex);
+
+    auto& data = get_loop_from_handle(tcp);
+
+    auto tcp_data = data.m_tcp_servers.release(tcp);
+    impl::remove_tcp_server(data.m_context, tcp_data.get());
+
+    if (tcp_data->socket_obj) {
+        tcp_data->socket_obj->close();
+        tcp_data->socket_obj.reset();
+    }
+}
+
+void bind_tcp_server(tcp_server tcp, std::string_view addr, uint16_t port) {
+    std::unique_lock lock(g_mutex);
+
+    auto& data = get_loop_from_handle(tcp);
+
+    auto& tcp_data = data.m_tcp_servers[tcp];
+    tcp_data.socket_obj->bind(addr, port);
+}
+
+void bind_tcp_server(tcp_server tcp, uint16_t port) {
+    std::unique_lock lock(g_mutex);
+
+    auto& data = get_loop_from_handle(tcp);
+
+    auto& tcp_data = data.m_tcp_servers[tcp];
+    tcp_data.socket_obj->bind(port);
+}
+
+void listen_tcp(tcp_server tcp, size_t backlog, tcp_server_callback&& callback) {
+    std::unique_lock lock(g_mutex);
+
+    auto& data = get_loop_from_handle(tcp);
+
+    auto& tcp_data = data.m_tcp_servers[tcp];
+    tcp_data.connect_callback = std::move(callback);
+
+    tcp_data.socket_obj->listen(backlog);
+}
+
+tcp accept_tcp(tcp_server tcp) {
+    std::unique_lock lock(g_mutex);
+
+    auto& data = get_loop_from_handle(tcp);
+
+    auto& tcp_server_data = data.m_tcp_servers[tcp];
+    auto socket = tcp_server_data.socket_obj->accept();
+
+    auto [handle, tcp_data] = data.m_tcps.allocate_new();
+    tcp_data->callback = tcp_loop_callback;
+    tcp_data->socket_obj = std::move(socket);
+    tcp_data->state = impl::tcp_data::state::connected;
+
+    impl::add_tcp(data.m_context, tcp_data.get());
+    data.m_tcps.assign(handle, std::move(tcp_data));
+
+    return handle;
 }
 
 }

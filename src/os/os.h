@@ -45,4 +45,19 @@ public:
     virtual size_t write(const uint8_t* buffer, size_t size) = 0;
 };
 
+class tcp_server_socket : public resource {
+public:
+    virtual ~tcp_server_socket() override = default;
+
+    [[nodiscard]] virtual error get_internal_error() = 0;
+
+    virtual void close() = 0;
+
+    virtual void bind(uint16_t port) = 0;
+    virtual void bind(std::string_view ip, uint16_t port) = 0;
+
+    virtual void listen(size_t backlog_size) = 0;
+    virtual std::shared_ptr<tcp_socket> accept() = 0;
+};
+
 }

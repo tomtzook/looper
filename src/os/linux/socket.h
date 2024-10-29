@@ -54,7 +54,7 @@ public:
 
     void configure_blocking(bool blocking);
 
-    void bind(const std::string& ip, uint16_t port);
+    void bind(const std::string_view& ip, uint16_t port);
     void bind(uint16_t port);
 
     void listen(size_t backlog_size);

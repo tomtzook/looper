@@ -22,6 +22,7 @@ private:
 class linux_tcp_socket : public tcp_socket {
 public:
     linux_tcp_socket();
+    explicit linux_tcp_socket(os::descriptor fd);
     ~linux_tcp_socket() override;
 
     [[nodiscard]] descriptor get_descriptor() const override;
@@ -36,6 +37,27 @@ public:
 
     size_t read(uint8_t* buffer, size_t buffer_size) override;
     size_t write(const uint8_t* buffer, size_t size) override;
+
+private:
+    int m_fd;
+    linux_base_socket m_socket;
+};
+
+class linux_tcp_server_socket : public tcp_server_socket {
+public:
+    linux_tcp_server_socket();
+    ~linux_tcp_server_socket() override;
+
+    [[nodiscard]] descriptor get_descriptor() const override;
+    [[nodiscard]] error get_internal_error() override;
+
+    void close() override;
+
+    void bind(uint16_t port) override;
+    void bind(std::string_view ip, uint16_t port) override;
+
+    void listen(size_t backlog_size) override;
+    std::shared_ptr<tcp_socket> accept() override;
 
 private:
     int m_fd;

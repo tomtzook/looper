@@ -77,14 +77,16 @@ void linux_base_socket::configure_blocking(bool blocking) {
     m_is_blocking = blocking;
 }
 
-void linux_base_socket::bind(const std::string& ip, uint16_t port) {
+void linux_base_socket::bind(const std::string_view& ip, uint16_t port) {
     throw_if_closed();
     throw_if_disabled();
+
+    std::string ip_c(ip);
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = ::htons(port);
-    ::inet_pton(AF_INET, ip.c_str(), &addr.sin_addr);
+    ::inet_pton(AF_INET, ip_c.c_str(), &addr.sin_addr);
 
     if (::bind(get_fd(), reinterpret_cast<sockaddr*>(&addr), sizeof(addr))) {
         handle_call_error();

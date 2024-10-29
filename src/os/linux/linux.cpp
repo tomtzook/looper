@@ -53,7 +53,12 @@ void linux_event::clear() {
 }
 
 linux_tcp_socket::linux_tcp_socket()
-    : m_fd(create_tcp_socket())
+    : linux_tcp_socket(create_tcp_socket()) {
+
+}
+
+linux_tcp_socket::linux_tcp_socket(os::descriptor fd)
+    : m_fd(fd)
     , m_socket(m_fd) {
     m_socket.configure_blocking(false);
     m_socket.setoption<sockopt_reuseport>(true);
@@ -94,6 +99,48 @@ size_t linux_tcp_socket::read(uint8_t* buffer, size_t buffer_size) {
 
 size_t linux_tcp_socket::write(const uint8_t* buffer, size_t size) {
     return m_socket.write(buffer, size);
+}
+
+
+linux_tcp_server_socket::linux_tcp_server_socket()
+    : m_fd(create_tcp_socket())
+    , m_socket(m_fd) {
+    m_socket.configure_blocking(false);
+    m_socket.setoption<sockopt_reuseport>(true);
+    m_socket.setoption<sockopt_keepalive>(true);
+}
+
+linux_tcp_server_socket::~linux_tcp_server_socket() {
+    m_socket.close();
+}
+
+descriptor linux_tcp_server_socket::get_descriptor() const {
+    return m_fd;
+}
+
+error linux_tcp_server_socket::get_internal_error() {
+    return m_socket.get_internal_error();
+}
+
+void linux_tcp_server_socket::close() {
+    m_socket.close();
+}
+
+void linux_tcp_server_socket::bind(uint16_t port) {
+    m_socket.bind(port);
+}
+
+void linux_tcp_server_socket::bind(std::string_view ip, uint16_t port) {
+    m_socket.bind(ip, port);
+}
+
+void linux_tcp_server_socket::listen(size_t backlog_size) {
+    m_socket.listen(backlog_size);
+}
+
+std::shared_ptr<tcp_socket> linux_tcp_server_socket::accept() {
+    const auto fd = m_socket.accept();
+    return std::make_shared<linux_tcp_socket>(fd);
 }
 
 }

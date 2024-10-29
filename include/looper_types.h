@@ -23,5 +23,6 @@ using event_callback = std::function<void(loop, event)>;
 using timer_callback = std::function<void(loop, timer)>;
 using tcp_callback = std::function<void(loop, tcp, error)>;
 using tcp_read_callback = std::function<void(loop, tcp, std::span<const uint8_t> data, error)>;
+using tcp_server_callback = std::function<void(loop, tcp_server)>;
 
 }
