@@ -51,9 +51,10 @@ add_library(looper STATIC
         src/util/util.h)
 target_include_directories(looper
         PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+            $<INSTALL_INTERFACE:looper>
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
 
 add_executable(test1 test1.cpp)
 target_link_libraries(test1 looper)
