@@ -17,8 +17,8 @@ void run_forever(loop loop);
 // futures
 future create_future(loop loop, future_callback&& callback);
 void destroy_future(future future);
-void execute_once(future future, std::chrono::milliseconds delay);
-bool wait_for(future future, std::chrono::milliseconds timeout);
+void execute_once(future future, std::chrono::milliseconds delay = std::chrono::milliseconds(0));
+bool wait_for(future future, std::chrono::milliseconds timeout = std::chrono::milliseconds(0));
 
 // events
 event create_event(loop loop, event_callback&& callback);

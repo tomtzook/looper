@@ -214,7 +214,7 @@ void linux_base_socket::handle_call_error(int code) {
     }
 
     if (code == ECONNRESET) {
-        close();
+        close(); // todo: maybe we shouldn't auto close socket and let the user handle it
     }
 
     throw os_exception(code);

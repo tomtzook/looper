@@ -8,8 +8,6 @@
 
 namespace looper::impl {
 
-// todo: modify so that handles are only in looper.cpp layers and here we just work with structs
-
 loop_context* create_loop();
 void destroy_loop(loop_context* context);
 

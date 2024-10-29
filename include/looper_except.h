@@ -50,11 +50,11 @@ private:
 
 class os_exception : public std::exception {
 public:
-    explicit os_exception(int code)
+    explicit os_exception(error code)
         : m_code(code)
     {}
 
-    [[nodiscard]] int get_code() const {
+    [[nodiscard]] error get_code() const {
         return m_code;
     }
 
@@ -63,7 +63,7 @@ public:
     }
 
 private:
-    int m_code;
+    error m_code;
 };
 
 }

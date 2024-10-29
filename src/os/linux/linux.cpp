@@ -68,6 +68,10 @@ descriptor linux_tcp_socket::get_descriptor() const {
     return m_fd;
 }
 
+error linux_tcp_socket::get_internal_error() {
+    return m_socket.get_internal_error();
+}
+
 void linux_tcp_socket::close() {
     m_socket.close();
 }

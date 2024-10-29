@@ -2,6 +2,8 @@
 
 #include <memory>
 
+#include <looper_types.h>
+
 namespace looper::os {
 
 using descriptor = int;
@@ -24,6 +26,8 @@ public:
 class tcp_socket : public resource {
 public:
     virtual ~tcp_socket() override = default;
+
+    [[nodiscard]] virtual error get_internal_error() = 0;
 
     virtual void close() = 0;
 

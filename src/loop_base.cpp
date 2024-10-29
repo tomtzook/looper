@@ -5,6 +5,27 @@ namespace looper::impl {
 
 #define log_module loop_log_module
 
+loop_context::loop_context()
+        : m_mutex()
+        , m_poller(os::create_poller())
+        , m_timeout(initial_poll_timeout)
+        , m_run_loop_event(os::create_event())
+        , stop(false)
+        , executing(false)
+        , m_run_finished()
+        , m_resource_table(0, handles::type_resource)
+        , m_descriptor_map()
+        , m_futures()
+        , m_timers()
+        , m_updates()
+        , m_timer_call_holder()
+        , m_future_call_holder()
+        , m_read_buffer() {
+    m_updates.resize(initial_reserve_size);
+    m_timer_call_holder.reserve(initial_reserve_size);
+    m_future_call_holder.reserve(initial_reserve_size);
+}
+
 std::chrono::milliseconds time_now() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now().time_since_epoch());

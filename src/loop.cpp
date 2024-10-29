@@ -10,10 +10,6 @@ namespace looper::impl {
 
 #define log_module loop_log_module
 
-static constexpr size_t max_events_for_process = 20;
-static constexpr auto initial_poll_timeout = std::chrono::milliseconds(1000);
-static constexpr auto min_poll_timeout = std::chrono::milliseconds(100);
-
 static void run_signal_resource_handler(loop_context* context, void* data, event_types events) {
     context->m_run_loop_event->clear();
 }
@@ -27,6 +23,17 @@ static void event_resource_handler(loop_context* context, void* data, event_type
     }
 
     invoke_func(lock, "event_callback", event->from_loop_callback, event);
+}
+
+static void reset_smallest_timeout(loop_context* context) {
+    std::chrono::milliseconds timeout = initial_poll_timeout;
+    for (auto* timer : context->m_timers) {
+        if (timer->timeout < timeout) {
+            timeout = timer->timeout;
+        }
+    }
+
+    context->m_timeout = timeout;
 }
 
 static void process_update(loop_context* context, update& update) {
@@ -124,30 +131,13 @@ static void process_futures(loop_context* context, std::unique_lock<std::mutex>&
     lock.lock();
 }
 
-loop_context::loop_context()
-    : m_mutex()
-    , m_poller(os::create_poller())
-    , m_timeout(initial_poll_timeout)
-    , m_run_loop_event(os::create_event())
-    , stop(false)
-    , executing(false)
-    , m_run_finished()
-    , m_resource_table(0, handles::type_resource)
-    , m_descriptor_map()
-    , m_futures()
-    , m_timers()
-    , m_updates()
-    , m_read_buffer()
-{}
-
 loop_context* create_loop() {
     looper_trace_info(log_module, "creating looper");
 
-    auto* context = new loop_context();
-    add_resource(context, context->m_run_loop_event, event_in, run_signal_resource_handler);
-    // todo: handle release on failure
+    auto context = std::make_unique<loop_context>();
+    add_resource(context.get(), context->m_run_loop_event, event_in, run_signal_resource_handler);
 
-    return context;
+    return context.release();
 }
 
 void destroy_loop(loop_context* context) {
@@ -175,13 +165,14 @@ void add_event(loop_context* context, event_data* event) {
 
     auto resource = add_resource(context, event->event_obj, event_in, event_resource_handler, event);
     event->resource = resource;
+
+    looper_trace_info(log_module, "added event: ptr=0x%x resource_handle=%lu", event, resource);
 }
 
 void remove_event(loop_context* context, event_data* event) {
     std::unique_lock lock(context->m_mutex);
 
-    // todo: remove in a thread-safe way?
-    //  what if we are in a timer user_callback and change the timer in the middle of iteration?
+    looper_trace_info(log_module, "removing event: ptr=0x%x resource_handle=%lu", event, event->resource);
 
     if (event->resource != empty_handle) {
         remove_resource(context, event->resource);
@@ -215,13 +206,10 @@ void add_timer(loop_context* context, timer_data* timer) {
 void remove_timer(loop_context* context, timer_data* timer) {
     std::unique_lock lock(context->m_mutex);
 
-    // todo: find new smallest timeout
-
-    // todo: remove in a thread-safe way?
-    //  what if we are in a timer user_callback and change the timer in the middle of iteration?
+    looper_trace_info(log_module, "removing timer: ptr=0x%x", timer);
 
     context->m_timers.remove(timer);
-    looper_trace_info(log_module, "removing timer: ptr=0x%x", timer);
+    reset_smallest_timeout(context);
 }
 
 void reset_timer(loop_context* context, timer_data* timer) {
@@ -246,14 +234,15 @@ void add_future(loop_context* context, future_data* future) {
 void remove_future(loop_context* context, future_data* future) {
     std::unique_lock lock(context->m_mutex);
 
-    // todo: remove in a thread-safe way?
-    //  what if we are in a timer user_callback and change the timer in the middle of iteration?
+    looper_trace_info(log_module, "removing future: ptr=0x%x", future);
 
     context->m_futures.remove(future);
 }
 
 void exec_future(loop_context* context, future_data* future) {
     std::unique_lock lock(context->m_mutex);
+
+    // todo: there is no guarantee to execute exactly after the delay
 
     future->finished = false;
     future->execute_time = time_now() + future->delay;

@@ -46,7 +46,7 @@ struct looper_data {
     handles::handle_table<loop_data, 8> m_loops;
 };
 
-std::mutex g_mutex; // todo: we use this mutex everywhere, could be problematic, limit use
+std::mutex g_mutex; // todo: we use this mutex everywhere, could be problematic, limit use. perhaps remove lock from loop layer, how?
 looper_data g_instance;
 
 static inline loop_data& get_loop(loop loop) {
@@ -93,11 +93,15 @@ static void tcp_loop_callback(impl::tcp_data* tcp, impl::tcp_data::cause cause, 
         case impl::tcp_data::cause::read:
             invoke_func_nolock("tcp_read_callback", tcp->read_callback, loop, tcp->handle, cause_data.read.data, error);
             break;
+        case impl::tcp_data::cause::error:
+            // todo: how to pass to user?
+            break;
     }
 }
 
 loop create() {
-    // todo: need locking
+    std::unique_lock lock(g_mutex);
+
     auto [handle, data] = g_instance.m_loops.allocate_new();
     g_instance.m_loops.assign(handle, std::move(data));
 
@@ -105,19 +109,28 @@ loop create() {
 }
 
 void destroy(loop loop) {
-    // todo: need proper sync
+    std::unique_lock lock(g_mutex);
+
     auto data = g_instance.m_loops.release(loop);
     impl::destroy_loop(data->m_context);
     data->m_destroyed = true;
 }
 
 void run_once(loop loop) {
+    std::unique_lock lock(g_mutex);
+
     auto& data = get_loop(loop);
+
+    lock.unlock();
     impl::run_once(data.m_context);
 }
 
 void run_forever(loop loop) {
+    std::unique_lock lock(g_mutex);
+
     auto& data = get_loop(loop);
+
+    lock.unlock();
     impl::run_forever(data.m_context);
 }
 
@@ -127,10 +140,13 @@ future create_future(loop loop, future_callback&& callback) {
 
     auto& data = get_loop(loop);
 
-    auto [handle, future_data] = data.m_futures.assign_new();
-    future_data.user_callback = std::move(callback);
-    future_data.from_loop_callback = future_loop_callback;
-    impl::add_future(data.m_context, &future_data);
+    auto [handle, future_data] = data.m_futures.allocate_new();
+    future_data->user_callback = std::move(callback);
+    future_data->from_loop_callback = future_loop_callback;
+
+    impl::add_future(data.m_context, future_data.get());
+
+    data.m_futures.assign(handle, std::move(future_data));
 
     return handle;
 }
@@ -186,12 +202,14 @@ event create_event(loop loop, event_callback&& callback) {
 
     auto& data = get_loop(loop);
 
-    auto [handle, event_data] = data.m_events.assign_new();
-    event_data.user_callback = std::move(callback);
-    event_data.event_obj = os::create_event();
-    event_data.from_loop_callback = event_loop_callback;
+    auto [handle, event_data] = data.m_events.allocate_new();
+    event_data->user_callback = std::move(callback);
+    event_data->event_obj = os::create_event();
+    event_data->from_loop_callback = event_loop_callback;
 
-    impl::add_event(data.m_context, &event_data);
+    impl::add_event(data.m_context, event_data.get());
+
+    data.m_events.assign(handle, std::move(event_data));
 
     return handle;
 }
@@ -287,13 +305,14 @@ tcp create_tcp(loop loop) {
 
     auto& data = get_loop(loop);
 
-    auto [handle, tcp_data] = data.m_tcps.assign_new();
-    tcp_data.callback = tcp_loop_callback;
-    tcp_data.socket_obj = os::create_tcp_socket();
-    tcp_data.state = impl::tcp_data::state::open;
+    auto [handle, tcp_data] = data.m_tcps.allocate_new();
+    tcp_data->callback = tcp_loop_callback;
+    tcp_data->socket_obj = os::create_tcp_socket();
+    tcp_data->state = impl::tcp_data::state::open;
 
-    // todo: this can fail!, we will have the handle map with data allocation
-    impl::add_tcp(data.m_context, &tcp_data);
+    impl::add_tcp(data.m_context, tcp_data.get());
+
+    data.m_tcps.assign(handle, std::move(tcp_data));
 
     return handle;
 }

@@ -97,7 +97,8 @@ struct tcp_data {
     enum class cause {
         connect,
         write_finished,
-        read
+        read,
+        error
     };
     union cause_data {
         struct {

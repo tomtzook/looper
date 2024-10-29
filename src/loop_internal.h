@@ -81,8 +81,15 @@ struct loop_context {
 
     std::deque<update> m_updates;
 
+    std::vector<std::pair<timer_data*, timer_data::loop_callback>> m_timer_call_holder;
+    std::vector<std::pair<future_data*, future_data::loop_callback>> m_future_call_holder;
     uint8_t m_read_buffer[2048];
 };
+
+static constexpr size_t max_events_for_process = 20;
+static constexpr size_t initial_reserve_size = 20;
+static constexpr auto initial_poll_timeout = std::chrono::milliseconds(1000);
+static constexpr auto min_poll_timeout = std::chrono::milliseconds(100);
 
 std::chrono::milliseconds time_now();
 void signal_run(loop_context* context);

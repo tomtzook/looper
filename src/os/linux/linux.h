@@ -25,6 +25,7 @@ public:
     ~linux_tcp_socket() override;
 
     [[nodiscard]] descriptor get_descriptor() const override;
+    [[nodiscard]] error get_internal_error() override;
 
     void close() override;
 
