@@ -6,6 +6,24 @@
 
 namespace looper {
 
+class loop_closing_exception : public std::exception {
+public:
+    explicit loop_closing_exception(loop handle)
+        : m_handle(handle)
+    {}
+
+    [[nodiscard]] loop get_handle() const {
+        return m_handle;
+    }
+
+    [[nodiscard]] const char * what() const noexcept override {
+        return "loop is closing and can't be used";
+    }
+
+private:
+    loop m_handle;
+};
+
 class no_space_exception : public std::exception {
     [[nodiscard]] const char * what() const noexcept override {
         return "no space more more data";

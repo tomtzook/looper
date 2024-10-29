@@ -1,3 +1,5 @@
+#include <optional>
+#include <thread>
 
 #include <looper.h>
 #include <looper_tcp.h>
@@ -15,7 +17,9 @@ struct loop_data {
     explicit loop_data(loop handle)
         : m_handle(handle)
         , m_context(impl::create_loop())
+        , m_closing(false)
         , m_destroyed(false)
+        , m_thread(nullptr)
         , m_events(handles::handle{handle}.index(), handles::type_event)
         , m_timers(handles::handle{handle}.index(), handles::type_timer)
         , m_futures(handles::handle{handle}.index(), handles::type_future)
@@ -30,8 +34,10 @@ struct loop_data {
 
     loop m_handle;
     impl::loop_context* m_context;
+    bool m_closing;
     bool m_destroyed;
 
+    std::unique_ptr<std::thread> m_thread;
     handles::handle_table<impl::event_data, 16> m_events;
     handles::handle_table<impl::timer_data, 16> m_timers;
     handles::handle_table<impl::future_data, 16> m_futures;
@@ -49,8 +55,26 @@ struct looper_data {
 std::mutex g_mutex; // todo: we use this mutex everywhere, could be problematic, limit use. perhaps remove lock from loop layer, how?
 looper_data g_instance;
 
+static inline std::optional<loop_data*> try_get_loop(loop loop) {
+    if (!g_instance.m_loops.has(loop)) {
+        return std::nullopt;
+    }
+
+    auto& data = g_instance.m_loops[loop];
+    if (data.m_closing) {
+        return std::nullopt;
+    }
+
+    return {&data};
+}
+
 static inline loop_data& get_loop(loop loop) {
-    return g_instance.m_loops[loop];
+    auto& data = g_instance.m_loops[loop];
+    if (data.m_closing) {
+        throw loop_closing_exception(loop);
+    }
+
+    return data;
 }
 
 static inline loop get_loop_handle(handle handle) {
@@ -61,6 +85,28 @@ static inline loop get_loop_handle(handle handle) {
 static inline loop_data& get_loop_from_handle(handle handle) {
     auto loop_handle = get_loop_handle(handle);
     return get_loop(loop_handle);
+}
+
+static void run_loop_forever(loop loop) {
+    while (true) {
+        std::unique_lock lock(g_mutex);
+        auto data_opt = try_get_loop(loop);
+        if (!data_opt) {
+            break;
+        }
+
+        auto* data = data_opt.value();
+        lock.unlock();
+
+        bool finished = impl::run_once(data->m_context);
+        if (finished) {
+            break;
+        }
+    }
+}
+
+static void thread_main(loop loop) {
+    run_loop_forever(loop);
 }
 
 static void future_loop_callback(impl::future_data* future) {
@@ -95,6 +141,7 @@ static void tcp_loop_callback(impl::tcp_data* tcp, impl::tcp_data::cause cause, 
             break;
         case impl::tcp_data::cause::error:
             // todo: how to pass to user?
+            std::abort();
             break;
     }
 }
@@ -110,16 +157,29 @@ loop create() {
 
 void destroy(loop loop) {
     std::unique_lock lock(g_mutex);
+    auto& data = get_loop(loop);
+    data.m_closing = true;
 
-    auto data = g_instance.m_loops.release(loop);
-    impl::destroy_loop(data->m_context);
-    data->m_destroyed = true;
+    lock.unlock();
+
+    if (data.m_thread && data.m_thread->joinable()) {
+        data.m_thread->join();
+    }
+
+    impl::destroy_loop(data.m_context);
+    lock.lock();
+
+    auto released_data = g_instance.m_loops.release(loop);
+    released_data->m_destroyed = true;
 }
 
 void run_once(loop loop) {
     std::unique_lock lock(g_mutex);
 
     auto& data = get_loop(loop);
+    if (data.m_thread) {
+        throw std::runtime_error("loop running in thread");
+    }
 
     lock.unlock();
     impl::run_once(data.m_context);
@@ -129,9 +189,23 @@ void run_forever(loop loop) {
     std::unique_lock lock(g_mutex);
 
     auto& data = get_loop(loop);
+    if (data.m_thread) {
+        throw std::runtime_error("loop running in thread");
+    }
 
     lock.unlock();
-    impl::run_forever(data.m_context);
+    run_loop_forever(loop);
+}
+
+void exec_in_thread(loop loop) {
+    std::unique_lock lock(g_mutex);
+
+    auto& data = get_loop(loop);
+    if (data.m_thread) {
+        return;
+    }
+
+    data.m_thread = std::make_unique<std::thread>(&thread_main, loop);
 }
 
 // execute

@@ -63,7 +63,7 @@ struct future_data {
     future handle;
 
     std::chrono::milliseconds delay;
-    std::condition_variable exec_finished; // todo: so we have this per future! is this a problem?
+    std::condition_variable exec_finished;
     future_callback user_callback;
 
     // managed in loop

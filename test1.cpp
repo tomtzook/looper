@@ -44,6 +44,7 @@ int main() {
     std::thread server_thread(&thread_server);
 
     auto loop = looper::create();
+    looper::exec_in_thread(loop);
 
     auto tcp = looper::create_tcp(loop);
     looper::bind_tcp(tcp, 50001);
@@ -77,11 +78,13 @@ int main() {
         });
     });
 
-    for (int i = 0; i < 100; ++i) {
+    /*for (int i = 0; i < 100; ++i) {
         looper::run_once(loop);
         usleep(50000);
-    }
+    }*/
+    sleep(10);
 
+    printf("done\n");
     looper::destroy(loop);
 
     if (server_thread.joinable()) {

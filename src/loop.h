@@ -35,6 +35,5 @@ void write_tcp(loop_context* context, tcp_data* tcp, std::span<const uint8_t> bu
 
 // run
 bool run_once(loop_context* context);
-void run_forever(loop_context* context);
 
 }

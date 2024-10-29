@@ -76,6 +76,8 @@ static void process_events(loop_context* context, std::unique_lock<std::mutex>& 
     for (auto [descriptor, revents] : events) {
         auto it = context->m_descriptor_map.find(descriptor);
         if (it == context->m_descriptor_map.end()) {
+            // make sure to remove this fd, guess it somehow was left over
+            context->m_poller->remove(descriptor);
             continue;
         }
 
@@ -281,15 +283,6 @@ bool run_once(loop_context* context) {
     context->m_run_finished.notify_all();
 
     return context->stop;
-}
-
-void run_forever(loop_context* context) {
-    while (true) {
-        bool finished = run_once(context);
-        if (finished) {
-            break;
-        }
-    }
 }
 
 }

@@ -14,6 +14,8 @@ void destroy(loop loop);
 void run_once(loop loop);
 void run_forever(loop loop);
 
+void exec_in_thread(loop loop);
+
 // futures
 future create_future(loop loop, future_callback&& callback);
 void destroy_future(future future);
