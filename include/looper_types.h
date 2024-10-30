@@ -12,6 +12,7 @@ using error = uint32_t;
 
 static constexpr handle empty_handle = static_cast<handle>(-1);
 static constexpr auto no_timeout = std::chrono::milliseconds(0);
+static constexpr auto no_delay = std::chrono::milliseconds(0);
 
 using loop = handle;
 using future = handle;

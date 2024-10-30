@@ -240,13 +240,4 @@ void linux_base_socket::throw_if_closed() const {
     }
 }
 
-int create_tcp_socket2() {
-    int m_fd = ::socket(AF_INET, SOCK_STREAM, 0);
-    if (m_fd < 0) {
-        throw os_exception(errno);
-    }
-
-    return m_fd;
-}
-
 }

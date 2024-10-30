@@ -1,5 +1,10 @@
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <cerrno>
 
 #include <cstdio>
 #include <thread>
@@ -10,11 +15,19 @@
 
 #include "src/os/linux/socket.h"
 
-
 using namespace std::chrono_literals;
 
+int create_tcp_socket2() {
+    int m_fd = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (m_fd < 0) {
+        throw looper::os_exception(errno);
+    }
+
+    return m_fd;
+}
+
 void thread_server() {
-    const auto fd = looper::os::create_tcp_socket2();
+    const auto fd = create_tcp_socket2();
     looper::os::linux_base_socket server_socket(fd);
 
     server_socket.configure_blocking(true);

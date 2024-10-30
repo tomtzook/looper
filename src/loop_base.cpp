@@ -32,6 +32,8 @@ std::chrono::milliseconds time_now() {
 }
 
 void signal_run(loop_context* context) {
+    looper_trace_debug(log_module, "signalling loop run: context=0x%x", context);
+
     context->m_run_loop_event->set();
 }
 
@@ -52,6 +54,8 @@ resource add_resource(loop_context* context, std::shared_ptr<os::resource> resou
     data->events = 0;
     data->callback = std::move(callback);
 
+    looper_trace_debug(log_module, "adding resource: context=0x%x, handle=%lu, fd=%lu", context, handle, descriptor);
+
     auto [_, data_ptr] = context->m_resource_table.assign(handle, std::move(data));
 
     context->m_descriptor_map.emplace(descriptor, &data_ptr);
@@ -64,6 +68,8 @@ resource add_resource(loop_context* context, std::shared_ptr<os::resource> resou
 
 void remove_resource(loop_context* context, resource resource) {
     auto data = context->m_resource_table.release(resource);
+
+    looper_trace_debug(log_module, "removing resource: context=0x%x, handle=%lu", context, resource);
 
     context->m_descriptor_map.erase(data->descriptor);
     context->m_poller->remove(data->descriptor);
@@ -88,6 +94,9 @@ void request_resource_events(loop_context* context, resource resource, event_typ
         default:
             throw std::runtime_error("unsupported event type");
     }
+
+    looper_trace_debug(log_module, "modifying resource events: context=0x%x, handle=%lu, type=%d, events=%lu",
+                       context, resource, static_cast<uint8_t>(update_type), events);
 
     context->m_updates.push_back({data.our_handle, update_type, events});
     signal_run(context);

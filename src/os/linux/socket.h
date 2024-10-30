@@ -96,6 +96,4 @@ private:
     bool m_disabled;
 };
 
-int create_tcp_socket2(); //todo: remove
-
 }

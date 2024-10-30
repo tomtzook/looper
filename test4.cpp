@@ -20,6 +20,10 @@ int main() {
     });
     looper::execute_once(future, 1s);
 
+    looper::execute_later(loop, [](looper::loop loop)->void {
+        printf("called2\n");
+    });
+
     for (int i = 0; i < 10; ++i) {
         looper::run_once(loop);
         usleep(50000);

@@ -77,6 +77,7 @@ static void process_events(loop_context* context, std::unique_lock<std::mutex>& 
         auto it = context->m_descriptor_map.find(descriptor);
         if (it == context->m_descriptor_map.end()) {
             // make sure to remove this fd, guess it somehow was left over
+            looper_trace_debug(log_module, "resource received events, but isn't attached to anything: fd=%lu", descriptor);
             context->m_poller->remove(descriptor);
             continue;
         }
@@ -87,6 +88,9 @@ static void process_events(loop_context* context, std::unique_lock<std::mutex>& 
         if (adjusted_flags == 0) {
             continue;
         }
+
+        looper_trace_debug(log_module, "resource has events: context=0x%x, handle=%lu, events=%lu",
+                           context, data->our_handle, adjusted_flags);
 
         invoke_func(lock, "resource_callback",
                     data->callback, context, data->user_ptr, adjusted_flags);
@@ -101,6 +105,8 @@ static void process_timers(loop_context* context, std::unique_lock<std::mutex>& 
         if (!timer->running || timer->hit || timer->next_timestamp > now) {
             continue;
         }
+
+        looper_trace_debug(log_module, "timer hit: ptr=0x%x", timer);
 
         timer->hit = true;
         to_call.push_back({timer, timer->from_loop_callback});
@@ -121,6 +127,8 @@ static void process_futures(loop_context* context, std::unique_lock<std::mutex>&
         if (future->finished || future->execute_time > now) {
             continue;
         }
+
+        looper_trace_debug(log_module, "future finished: ptr=0x%x", future);
 
         future->finished = true;
         to_call.push_back({future, future->from_loop_callback});
@@ -168,13 +176,13 @@ void add_event(loop_context* context, event_data* event) {
     auto resource = add_resource(context, event->event_obj, event_in, event_resource_handler, event);
     event->resource = resource;
 
-    looper_trace_info(log_module, "added event: ptr=0x%x resource_handle=%lu", event, resource);
+    looper_trace_info(log_module, "added event: ptr=0x%x, resource_handle=%lu", event, resource);
 }
 
 void remove_event(loop_context* context, event_data* event) {
     std::unique_lock lock(context->m_mutex);
 
-    looper_trace_info(log_module, "removing event: ptr=0x%x resource_handle=%lu", event, event->resource);
+    looper_trace_info(log_module, "removing event: ptr=0x%x, resource_handle=%lu", event, event->resource);
 
     if (event->resource != empty_handle) {
         remove_resource(context, event->resource);
@@ -196,7 +204,7 @@ void add_timer(loop_context* context, timer_data* timer) {
 
     context->m_timers.push_back(timer);
 
-    looper_trace_info(log_module, "starting timer: ptr=0x%x next_time=%lu", timer, timer->next_timestamp.count());
+    looper_trace_info(log_module, "starting timer: ptr=0x%x, next_time=%lu", timer, timer->next_timestamp.count());
 
     if (context->m_timeout > timer->timeout) {
         context->m_timeout = timer->timeout;
@@ -220,7 +228,7 @@ void reset_timer(loop_context* context, timer_data* timer) {
     timer->hit = false;
     timer->next_timestamp = time_now() + timer->timeout;
 
-    looper_trace_info(log_module, "resetting timer: ptr=0x%x next_time=%lu", timer, timer->next_timestamp.count());
+    looper_trace_info(log_module, "resetting timer: ptr=0x%x, next_time=%lu", timer, timer->next_timestamp.count());
 }
 
 // execute
@@ -249,7 +257,7 @@ void exec_future(loop_context* context, future_data* future) {
     future->finished = false;
     future->execute_time = time_now() + future->delay;
 
-    looper_trace_info(log_module, "queueing future: ptr=0x%x run_at=%lu", future, future->execute_time.count());
+    looper_trace_info(log_module, "queueing future: ptr=0x%x, run_at=%lu", future, future->execute_time.count());
 
     if (future->delay.count() < 1) {
         signal_run(context);
