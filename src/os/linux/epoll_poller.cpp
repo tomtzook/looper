@@ -10,7 +10,7 @@ static constexpr size_t default_events_buffer_size = 32;
 static descriptor create() {
     const auto fd = ::epoll_create1(0);
     if (fd < 0) {
-        throw os_exception(errno);
+        throw_call_error();
     }
 
     return fd;
@@ -69,7 +69,7 @@ void epoll_poller::add(os::descriptor descriptor, event_types events) {
     event.data.fd = descriptor;
 
     if (::epoll_ctl(m_descriptor, EPOLL_CTL_ADD, descriptor, &event)) {
-        handle_error();
+        throw_call_error();
     }
 }
 
@@ -79,7 +79,7 @@ void epoll_poller::set(os::descriptor descriptor, event_types events) {
     event.data.fd = descriptor;
 
     if (::epoll_ctl(m_descriptor, EPOLL_CTL_MOD, descriptor, &event)) {
-        handle_error();
+        throw_call_error();
     }
 }
 
@@ -89,7 +89,7 @@ void epoll_poller::remove(os::descriptor descriptor) {
     event.data.fd = descriptor;
 
     if (::epoll_ctl(m_descriptor, EPOLL_CTL_DEL, descriptor, &event)) {
-        handle_error();
+        throw_call_error();
     }
 }
 
@@ -103,23 +103,18 @@ polled_events epoll_poller::poll(size_t max_events, std::chrono::milliseconds ti
     auto* events = reinterpret_cast<epoll_event*>(m_events.get());
     const auto count = ::epoll_wait(m_descriptor, events, static_cast<int>(max_events), static_cast<int>(timeout.count()));
     if (count < 0) {
-        int error = errno;
-        if (error == EINTR) {
+        const auto error = get_call_error();
+        if (error == error_interrupted) {
             // timeout has occurred
             m_data.set_count(0);
             return polled_events{&m_data};
         }
 
-        throw os_exception(error);
+        throw_call_error();
     }
 
     m_data.set_count(count);
     return polled_events{&m_data};
-}
-
-void epoll_poller::handle_error() {
-    int error = errno;
-    throw os_exception(error);
 }
 
 epoll_poller::epoll_event_data::epoll_event_data(std::shared_ptr<epoll_event[]> events)

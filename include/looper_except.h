@@ -68,11 +68,11 @@ private:
 
 class os_exception : public std::exception {
 public:
-    explicit os_exception(error code)
+    explicit os_exception(looper::error code)
         : m_code(code)
     {}
 
-    [[nodiscard]] error get_code() const {
+    [[nodiscard]] looper::error get_code() const {
         return m_code;
     }
 
@@ -81,7 +81,7 @@ public:
     }
 
 private:
-    error m_code;
+    looper::error m_code;
 };
 
 }

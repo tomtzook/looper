@@ -33,8 +33,7 @@ public:
 
     [[nodiscard]] int get_fd() const;
 
-    int get_call_error();
-    int get_internal_error();
+    looper::error get_internal_error() const;
 
     void setoption(sockopt_type opt, void* value, size_t size);
 
@@ -84,9 +83,6 @@ private:
     inline void disable() {
         m_disabled = true;
     }
-
-    void handle_call_error(int code=0);
-    void check_internal_error(int code=0);
 
     void throw_if_disabled() const;
     void throw_if_closed() const;

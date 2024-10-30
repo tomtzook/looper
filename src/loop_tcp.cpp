@@ -48,14 +48,6 @@ static void tcp_resource_handle_connected_read(std::unique_lock<std::mutex>& loc
     } catch (const os_exception& e) {
         error = e.get_code();
         looper_trace_error(log_module, "tcp read error: ptr=0x%x, code=%lu", tcp, e.get_code());
-    } catch (const os::eof_exception& e) {
-        // todo: pass EOF ERROR CODE
-        error = -1;
-        looper_trace_error(log_module, "tcp read error: ptr=0x%x, code=eof", tcp);
-    } catch (const os::closed_fd_exception& e) {
-        // todo: pass CLOSED ERROR CODE
-        error = -1;
-        looper_trace_error(log_module, "tcp read error: ptr=0x%x, code=closed", tcp);
     }
 
     tcp_data::cause_data cause_data{};

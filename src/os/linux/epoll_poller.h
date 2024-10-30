@@ -36,8 +36,6 @@ private:
         size_t m_count;
     };
 
-    void handle_error();
-
     os::descriptor m_descriptor;
     std::shared_ptr<epoll_event[]> m_events;
     size_t m_events_buffer_size;

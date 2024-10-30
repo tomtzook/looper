@@ -8,7 +8,7 @@
 namespace looper {
 
 using handle = uint32_t;
-using error = uint32_t;
+using error = int32_t;
 
 static constexpr handle empty_handle = static_cast<handle>(-1);
 static constexpr auto no_timeout = std::chrono::milliseconds(0);
@@ -28,5 +28,14 @@ using timer_callback = std::function<void(loop, timer)>;
 using tcp_callback = std::function<void(loop, tcp, error)>;
 using tcp_read_callback = std::function<void(loop, tcp, std::span<const uint8_t> data, error)>;
 using tcp_server_callback = std::function<void(loop, tcp_server)>;
+
+enum : error {
+    error_success = 0,
+    error_eof,
+    error_fd_closed,
+    error_again,
+    error_in_progress,
+    error_interrupted
+};
 
 }

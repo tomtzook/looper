@@ -16,7 +16,7 @@ namespace looper::os {
 static os::descriptor create_eventfd() {
     auto fd = eventfd(0, EFD_NONBLOCK);
     if (fd < 0) {
-        throw os_exception(errno);
+        throw_call_error();
     }
 
     return fd;
@@ -25,7 +25,7 @@ static os::descriptor create_eventfd() {
 static int create_tcp_socket() {
     int m_fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (m_fd < 0) {
-        throw os_exception(errno);
+        throw_call_error();
     }
 
     return m_fd;
@@ -44,12 +44,16 @@ descriptor linux_event::get_descriptor() const {
 }
 
 void linux_event::set() {
-    ::eventfd_write(get_descriptor(), 1);
+    if (::eventfd_write(get_descriptor(), 1)) {
+        throw_call_error();
+    }
 }
 
 void linux_event::clear() {
     eventfd_t value;
-    ::eventfd_read(get_descriptor(), &value);
+    if (::eventfd_read(get_descriptor(), &value)) {
+        throw_call_error();
+    }
 }
 
 linux_tcp_socket::linux_tcp_socket()
