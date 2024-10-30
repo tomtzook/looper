@@ -85,7 +85,8 @@ static inline loop_data& get_loop(loop loop) {
 
 static inline loop get_loop_handle(handle handle) {
     handles::handle full(handle);
-    return full.parent();
+    handles::handle loop(0, handles::type_loop, full.parent());
+    return loop.raw();
 }
 
 static inline loop_data& get_loop_from_handle(handle handle) {
