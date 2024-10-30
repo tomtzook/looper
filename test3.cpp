@@ -14,6 +14,7 @@
 using namespace std::chrono_literals;
 
 int main() {
+    looper::initialize();
     auto loop = looper::create();
     auto event = looper::create_event(loop, [](looper::loop loop, looper::event event)->void {
         printf("event\n");

@@ -12,6 +12,7 @@
 using namespace std::chrono_literals;
 
 int main() {
+    looper::initialize();
     auto loop = looper::create();
     looper::exec_in_thread(loop);
 

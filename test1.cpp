@@ -43,6 +43,7 @@ void thread_server() {
 int main() {
     std::thread server_thread(&thread_server);
 
+    looper::initialize();
     auto loop = looper::create();
     looper::exec_in_thread(loop);
 
