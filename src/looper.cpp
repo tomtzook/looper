@@ -13,14 +13,14 @@ namespace looper {
 
 #define log_module "looper"
 
-struct loop_data {
-    static constexpr size_t handle_counts_per_type = 64;
+static constexpr size_t handle_counts_per_type = 64;
+static constexpr size_t loops_count = 8;
 
+struct loop_data {
     explicit loop_data(loop handle)
         : m_handle(handle)
         , m_context(impl::create_loop())
         , m_closing(false)
-        , m_destroyed(false)
         , m_thread(nullptr)
         , m_events(handles::handle{handle}.index(), handles::type_event)
         , m_timers(handles::handle{handle}.index(), handles::type_timer)
@@ -29,10 +29,7 @@ struct loop_data {
         , m_tcp_servers(handles::handle{handle}.index(), handles::type_tcp_server)
     {}
     ~loop_data() {
-        if (!m_destroyed) {
-            impl::destroy_loop(m_context);
-            m_destroyed = true;
-        }
+        clear_context();
     }
 
     loop_data(const loop_data&) = delete;
@@ -40,10 +37,16 @@ struct loop_data {
     loop_data& operator=(const loop_data&) = delete;
     loop_data& operator=(loop_data&&) = delete;
 
+    void clear_context() {
+        if (m_context != nullptr) {
+            impl::destroy_loop(m_context);
+            m_context = nullptr;
+        }
+    }
+
     loop m_handle;
     impl::loop_context* m_context;
     bool m_closing;
-    bool m_destroyed;
 
     std::unique_ptr<std::thread> m_thread;
     handles::handle_table<impl::event_data, handle_counts_per_type> m_events;
@@ -67,7 +70,7 @@ struct looper_data {
     // todo: we use this mutex everywhere, could be problematic, limit use. perhaps remove lock from loop layer, how?
     //  could use some lock-less mechanisms, or spinlocks
     std::mutex m_mutex;
-    handles::handle_table<loop_data, 8> m_loops;
+    handles::handle_table<loop_data, loops_count> m_loops;
 };
 
 static inline looper_data& get_global_loop_data() {
@@ -192,11 +195,10 @@ void destroy(loop loop) {
         data.m_thread->join();
     }
 
-    impl::destroy_loop(data.m_context);
+    data.clear_context();
     lock.lock();
 
-    auto released_data = get_global_loop_data().m_loops.release(loop);
-    released_data->m_destroyed = true;
+    get_global_loop_data().m_loops.release(loop);
 }
 
 void run_once(loop loop) {
