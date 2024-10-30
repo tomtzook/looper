@@ -18,8 +18,7 @@ static constexpr size_t loops_count = 8;
 
 struct loop_data {
     explicit loop_data(loop handle)
-        : m_handle(handle)
-        , m_context(impl::create_loop())
+        : m_context(impl::create_loop())
         , m_closing(false)
         , m_thread(nullptr)
         , m_events(handles::handle{handle}.index(), handles::type_event)
@@ -29,6 +28,11 @@ struct loop_data {
         , m_tcp_servers(handles::handle{handle}.index(), handles::type_tcp_server)
     {}
     ~loop_data() {
+        if (m_thread && m_thread->joinable()) {
+            m_thread->join();
+        }
+        m_thread.reset();
+
         clear_context();
     }
 
@@ -44,7 +48,6 @@ struct loop_data {
         }
     }
 
-    loop m_handle;
     impl::loop_context* m_context;
     bool m_closing;
 
@@ -175,6 +178,47 @@ static void tcp_server_loop_callback(impl::tcp_server_data* tcp) {
     invoke_func_nolock("tcp_accept_user_callback", tcp->connect_callback, loop, tcp->handle);
 }
 
+static future create_future_internal(loop loop, future_callback&& callback) {
+    auto& data = get_loop(loop);
+
+    auto [handle, future_data] = data.m_futures.allocate_new();
+    future_data->user_callback = std::move(callback);
+    future_data->from_loop_callback = future_loop_callback;
+
+    impl::add_future(data.m_context, future_data.get());
+
+    data.m_futures.assign(handle, std::move(future_data));
+
+    return handle;
+}
+
+static void destroy_future_internal(future future) {
+    auto& data = get_loop_from_handle(future);
+
+    auto future_data = data.m_futures.release(future);
+    impl::remove_future(data.m_context, future_data.get());
+}
+
+static bool wait_for_future_internal(std::unique_lock<std::mutex>& lock, future future, std::chrono::milliseconds timeout) {
+    auto& data = get_loop_from_handle(future);
+
+    auto& future_data = data.m_futures[future];
+    if (future_data.finished) {
+        return false;
+    }
+
+    return !future_data.exec_finished.wait_for(lock, timeout, [future]()->bool {
+        auto& data = get_loop_from_handle(future);
+
+        if (!data.m_futures.has(future)) {
+            return true;
+        }
+
+        auto& future_data = data.m_futures[future];
+        return future_data.finished;
+    });
+}
+
 loop create() {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
@@ -189,10 +233,11 @@ void destroy(loop loop) {
     auto& data = get_loop(loop);
     data.m_closing = true;
 
+    auto thread = std::move(data.m_thread);
     lock.unlock();
 
-    if (data.m_thread && data.m_thread->joinable()) {
-        data.m_thread->join();
+    if (thread && thread->joinable()) {
+        thread->join();
     }
 
     data.clear_context();
@@ -239,27 +284,12 @@ void exec_in_thread(loop loop) {
 // execute
 future create_future(loop loop, future_callback&& callback) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
-
-    auto& data = get_loop(loop);
-
-    auto [handle, future_data] = data.m_futures.allocate_new();
-    future_data->user_callback = std::move(callback);
-    future_data->from_loop_callback = future_loop_callback;
-
-    impl::add_future(data.m_context, future_data.get());
-
-    data.m_futures.assign(handle, std::move(future_data));
-
-    return handle;
+    return create_future_internal(loop, std::move(callback));
 }
 
 void destroy_future(future future) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
-
-    auto& data = get_loop_from_handle(future);
-
-    auto future_data = data.m_futures.release(future);
-    impl::remove_future(data.m_context, future_data.get());
+    destroy_future_internal(future);
 }
 
 void execute_once(future future, std::chrono::milliseconds delay) {
@@ -278,24 +308,30 @@ void execute_once(future future, std::chrono::milliseconds delay) {
 
 bool wait_for(future future, std::chrono::milliseconds timeout) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
+    return wait_for_future_internal(lock, future, timeout);
+}
 
-    auto& data = get_loop_from_handle(future);
+void execute_later(loop loop, loop_callback&& callback) {
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
-    auto& future_data = data.m_futures[future];
-    if (future_data.finished) {
-        return false;
-    }
+    create_future_internal(loop, [callback](looper::loop loop, looper::future future)->void {
+        std::unique_lock lock(get_global_loop_data().m_mutex);
+        destroy_future_internal(future);
 
-    return !future_data.exec_finished.wait_for(lock, timeout, [future]()->bool {
-        auto& data = get_loop_from_handle(future);
-
-        if (!data.m_futures.has(future)) {
-            return true;
-        }
-
-        auto& future_data = data.m_futures[future];
-        return future_data.finished;
+        invoke_func(lock, "future_singleuse_callback", callback, loop);
     });
+}
+
+bool execute_later_and_wait(loop loop, loop_callback&& callback, std::chrono::milliseconds timeout) {
+    std::unique_lock lock(get_global_loop_data().m_mutex);
+
+    auto future = create_future_internal(loop, [callback](looper::loop loop, looper::future future)->void {
+        std::unique_lock lock(get_global_loop_data().m_mutex);
+        destroy_future_internal(future);
+
+        invoke_func(lock, "future_singleuse_callback", callback, loop);
+    });
+    return wait_for_future_internal(lock, future, timeout);
 }
 
 // events

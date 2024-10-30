@@ -19,8 +19,11 @@ void exec_in_thread(loop loop);
 // futures
 future create_future(loop loop, future_callback&& callback);
 void destroy_future(future future);
-void execute_once(future future, std::chrono::milliseconds delay = std::chrono::milliseconds(0));
-bool wait_for(future future, std::chrono::milliseconds timeout = std::chrono::milliseconds(0));
+void execute_once(future future, std::chrono::milliseconds delay = no_timeout);
+bool wait_for(future future, std::chrono::milliseconds timeout = no_timeout);
+
+void execute_later(loop loop, loop_callback&& callback);
+bool execute_later_and_wait(loop loop, loop_callback&& callback, std::chrono::milliseconds timeout = no_timeout);
 
 // events
 event create_event(loop loop, event_callback&& callback);

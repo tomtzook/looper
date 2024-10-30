@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <chrono>
 #include <functional>
 #include <span>
 
@@ -8,7 +9,9 @@ namespace looper {
 
 using handle = uint32_t;
 using error = uint32_t;
+
 static constexpr handle empty_handle = static_cast<handle>(-1);
+static constexpr auto no_timeout = std::chrono::milliseconds(0);
 
 using loop = handle;
 using future = handle;
