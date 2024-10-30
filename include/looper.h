@@ -8,8 +8,6 @@
 
 namespace looper {
 
-void initialize();
-
 loop create();
 void destroy(loop loop);
 

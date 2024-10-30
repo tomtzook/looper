@@ -35,6 +35,11 @@ struct loop_data {
         }
     }
 
+    loop_data(const loop_data&) = delete;
+    loop_data(loop_data&&) = delete;
+    loop_data& operator=(const loop_data&) = delete;
+    loop_data& operator=(loop_data&&) = delete;
+
     loop m_handle;
     impl::loop_context* m_context;
     bool m_closing;
@@ -54,14 +59,19 @@ struct looper_data {
         , m_loops(0, handles::type_loop)
     {}
 
+    looper_data(const looper_data&) = delete;
+    looper_data(looper_data&&) = delete;
+    looper_data& operator=(const looper_data&) = delete;
+    looper_data& operator=(looper_data&&) = delete;
+
+    // todo: we use this mutex everywhere, could be problematic, limit use. perhaps remove lock from loop layer, how?
+    //  could use some lock-less mechanisms, or spinlocks
     std::mutex m_mutex;
     handles::handle_table<loop_data, 8> m_loops;
 };
 
-// todo: we use this mutex everywhere, could be problematic, limit use. perhaps remove lock from loop layer, how?
-//  could use some lock-less mechanisms, or spinlocks
-static looper_data& get_global_loop_data() {
-    static looper_data g_instance;
+static inline looper_data& get_global_loop_data() {
+    static looper_data g_instance{};
     return g_instance;
 }
 
@@ -100,7 +110,7 @@ static inline loop_data& get_loop_from_handle(handle handle) {
 
 static void run_loop_forever(loop loop) {
     while (true) {
-        std::unique_lock lock(g_instance->m_mutex);
+        std::unique_lock lock(get_global_loop_data().m_mutex);
         auto data_opt = try_get_loop(loop);
         if (!data_opt) {
             break;
@@ -162,12 +172,8 @@ static void tcp_server_loop_callback(impl::tcp_server_data* tcp) {
     invoke_func_nolock("tcp_accept_user_callback", tcp->connect_callback, loop, tcp->handle);
 }
 
-void initialize() {
-    get_global_loop_data();
-}
-
 loop create() {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto [handle, data] = get_global_loop_data().m_loops.allocate_new();
     get_global_loop_data().m_loops.assign(handle, std::move(data));
@@ -176,7 +182,7 @@ loop create() {
 }
 
 void destroy(loop loop) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
     auto& data = get_loop(loop);
     data.m_closing = true;
 
@@ -194,7 +200,7 @@ void destroy(loop loop) {
 }
 
 void run_once(loop loop) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop(loop);
     if (data.m_thread) {
@@ -206,7 +212,7 @@ void run_once(loop loop) {
 }
 
 void run_forever(loop loop) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop(loop);
     if (data.m_thread) {
@@ -218,7 +224,7 @@ void run_forever(loop loop) {
 }
 
 void exec_in_thread(loop loop) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop(loop);
     if (data.m_thread) {
@@ -230,7 +236,7 @@ void exec_in_thread(loop loop) {
 
 // execute
 future create_future(loop loop, future_callback&& callback) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop(loop);
 
@@ -246,7 +252,7 @@ future create_future(loop loop, future_callback&& callback) {
 }
 
 void destroy_future(future future) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(future);
 
@@ -255,7 +261,7 @@ void destroy_future(future future) {
 }
 
 void execute_once(future future, std::chrono::milliseconds delay) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(future);
 
@@ -269,7 +275,7 @@ void execute_once(future future, std::chrono::milliseconds delay) {
 }
 
 bool wait_for(future future, std::chrono::milliseconds timeout) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(future);
 
@@ -292,7 +298,7 @@ bool wait_for(future future, std::chrono::milliseconds timeout) {
 
 // events
 event create_event(loop loop, event_callback&& callback) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop(loop);
 
@@ -309,7 +315,7 @@ event create_event(loop loop, event_callback&& callback) {
 }
 
 void destroy_event(event event) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(event);
     
@@ -318,7 +324,7 @@ void destroy_event(event event) {
 }
 
 void set_event(event event) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(event);
     
@@ -327,7 +333,7 @@ void set_event(event event) {
 }
 
 void clear_event(event event) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(event);
 
@@ -337,7 +343,7 @@ void clear_event(event event) {
 
 // timers
 timer create_timer(loop loop, std::chrono::milliseconds timeout, timer_callback&& callback) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop(loop);
 
@@ -350,7 +356,7 @@ timer create_timer(loop loop, std::chrono::milliseconds timeout, timer_callback&
 }
 
 void destroy_timer(timer timer) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(timer);
 
@@ -361,7 +367,7 @@ void destroy_timer(timer timer) {
 }
 
 void start_timer(timer timer) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(timer);
 
@@ -372,7 +378,7 @@ void start_timer(timer timer) {
 }
 
 void stop_timer(timer timer) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(timer);
 
@@ -383,7 +389,7 @@ void stop_timer(timer timer) {
 }
 
 void reset_timer(timer timer) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(timer);
 
@@ -395,7 +401,7 @@ void reset_timer(timer timer) {
 
 // tcp
 tcp create_tcp(loop loop) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop(loop);
 
@@ -412,7 +418,7 @@ tcp create_tcp(loop loop) {
 }
 
 void destroy_tcp(tcp tcp) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(tcp);
 
@@ -426,7 +432,7 @@ void destroy_tcp(tcp tcp) {
 }
 
 void bind_tcp(tcp tcp, uint16_t port) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(tcp);
 
@@ -437,7 +443,7 @@ void bind_tcp(tcp tcp, uint16_t port) {
 }
 
 void connect_tcp(tcp tcp, std::string_view server_address, uint16_t server_port, tcp_callback&& callback) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(tcp);
 
@@ -447,7 +453,7 @@ void connect_tcp(tcp tcp, std::string_view server_address, uint16_t server_port,
 }
 
 void start_tcp_read(tcp tcp, tcp_read_callback&& callback) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(tcp);
 
@@ -457,7 +463,7 @@ void start_tcp_read(tcp tcp, tcp_read_callback&& callback) {
 }
 
 void stop_tcp_read(tcp tcp) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(tcp);
 
@@ -466,7 +472,7 @@ void stop_tcp_read(tcp tcp) {
 }
 
 void write_tcp(tcp tcp, std::span<const uint8_t> buffer, tcp_callback&& callback) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(tcp);
 
@@ -476,7 +482,7 @@ void write_tcp(tcp tcp, std::span<const uint8_t> buffer, tcp_callback&& callback
 }
 
 tcp_server create_tcp_server(loop loop) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop(loop);
 
@@ -492,7 +498,7 @@ tcp_server create_tcp_server(loop loop) {
 }
 
 void destroy_tcp_server(tcp_server tcp) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(tcp);
 
@@ -506,7 +512,7 @@ void destroy_tcp_server(tcp_server tcp) {
 }
 
 void bind_tcp_server(tcp_server tcp, std::string_view addr, uint16_t port) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(tcp);
 
@@ -515,7 +521,7 @@ void bind_tcp_server(tcp_server tcp, std::string_view addr, uint16_t port) {
 }
 
 void bind_tcp_server(tcp_server tcp, uint16_t port) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(tcp);
 
@@ -524,7 +530,7 @@ void bind_tcp_server(tcp_server tcp, uint16_t port) {
 }
 
 void listen_tcp(tcp_server tcp, size_t backlog, tcp_server_callback&& callback) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(tcp);
 
@@ -535,7 +541,7 @@ void listen_tcp(tcp_server tcp, size_t backlog, tcp_server_callback&& callback) 
 }
 
 tcp accept_tcp(tcp_server tcp) {
-    std::unique_lock lock(g_instance->m_mutex);
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(tcp);
 
