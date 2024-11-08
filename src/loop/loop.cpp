@@ -1,7 +1,6 @@
 
-#include <looper_trace.h>
+#include "looper_trace.h"
 
-#include "os/except.h"
 #include "os/factory.h"
 #include "loop.h"
 #include "loop_internal.h"
@@ -11,7 +10,7 @@ namespace looper::impl {
 #define log_module loop_log_module
 
 static void run_signal_resource_handler(loop_context* context, void* data, event_types events) {
-    context->m_run_loop_event->clear();
+    os::event::clear(context->m_run_loop_event.get());
 }
 
 static void event_resource_handler(loop_context* context, void* data, event_types events) {
@@ -44,22 +43,42 @@ static void process_update(loop_context* context, update& update) {
     auto& data = context->m_resource_table[update.handle];
 
     switch (update.type) {
-        case update::type_add:
+        case update::type_add: {
             data.events = update.events;
-            context->m_poller->add(data.descriptor, data.events);
+            auto status = os::poll::add(context->m_poller.get(), data.descriptor, data.events);
+            if (status != error_success) {
+                looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
+                std::abort();
+            }
             break;
-        case update::type_new_events:
+        }
+        case update::type_new_events: {
             data.events = update.events;
-            context->m_poller->set(data.descriptor, data.events);
+            auto status = os::poll::set(context->m_poller.get(), data.descriptor, data.events);
+            if (status != error_success) {
+                looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
+                std::abort();
+            }
             break;
-        case update::type_new_events_add:
+        }
+        case update::type_new_events_add: {
             data.events |= update.events;
-            context->m_poller->set(data.descriptor, data.events);
+            auto status = os::poll::set(context->m_poller.get(), data.descriptor, data.events);
+            if (status != error_success) {
+                looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
+                std::abort();
+            }
             break;
-        case update::type_new_events_remove:
+        }
+        case update::type_new_events_remove: {
             data.events &= ~update.events;
-            context->m_poller->set(data.descriptor, data.events);
+            auto status = os::poll::set(context->m_poller.get(), data.descriptor, data.events);
+            if (status != error_success) {
+                looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
+                std::abort();
+            }
             break;
+        }
     }
 }
 
@@ -72,19 +91,27 @@ static void process_updates(loop_context* context) {
     }
 }
 
-static void process_events(loop_context* context, std::unique_lock<std::mutex>& lock, polled_events& events) {
-    for (auto [descriptor, revents] : events) {
-        auto it = context->m_descriptor_map.find(descriptor);
+static void process_events(loop_context* context, std::unique_lock<std::mutex>& lock, size_t event_count) {
+    for (int i = 0; i < event_count; i++) {
+        auto& event_data = context->m_event_data[i];
+
+        auto it = context->m_descriptor_map.find(event_data.descriptor);
         if (it == context->m_descriptor_map.end()) {
             // make sure to remove this fd, guess it somehow was left over
-            looper_trace_debug(log_module, "resource received events, but isn't attached to anything: fd=%lu", descriptor);
-            context->m_poller->remove(descriptor);
+            looper_trace_debug(log_module, "resource received events, but isn't attached to anything: fd=%lu", event_data.descriptor);
+
+            auto status = os::poll::remove(context->m_poller.get(), event_data.descriptor);
+            if (status != error_success) {
+                looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
+                std::abort();
+            }
+
             continue;
         }
 
         auto* data = it->second;
 
-        auto adjusted_flags = (data->events & revents);
+        auto adjusted_flags = (data->events & event_data.events);
         if (adjusted_flags == 0) {
             continue;
         }
@@ -145,7 +172,9 @@ loop_context* create_loop() {
     looper_trace_info(log_module, "creating looper");
 
     auto context = std::make_unique<loop_context>();
-    add_resource(context.get(), context->m_run_loop_event, event_in, run_signal_resource_handler);
+    add_resource(context.get(),
+                 os::event::get_descriptor(context->m_run_loop_event.get()),
+                 event_in, run_signal_resource_handler);
 
     return context.release();
 }
@@ -173,7 +202,9 @@ void destroy_loop(loop_context* context) {
 void add_event(loop_context* context, event_data* event) {
     std::unique_lock lock(context->m_mutex);
 
-    auto resource = add_resource(context, event->event_obj, event_in, event_resource_handler, event);
+    auto resource = add_resource(context,
+                                 os::event::get_descriptor(event->event_obj.get()),
+                                 event_in, event_resource_handler, event);
     event->resource = resource;
 
     looper_trace_info(log_module, "added event: ptr=0x%x, resource_handle=%lu", event, resource);
@@ -278,11 +309,28 @@ bool run_once(loop_context* context) {
 
     process_updates(context);
 
+    size_t event_count;
     lock.unlock();
-    auto result = context->m_poller->poll(max_events_for_process, context->m_timeout);
+    {
+        auto status = os::poll::poll(context->m_poller.get(),
+                                     max_events_for_process,
+                                     context->m_timeout,
+                                     context->m_event_data,
+                                     event_count);
+        if (status == error_interrupted) {
+            // timeout
+            event_count = 0;
+        } else if (status != error_success) {
+            looper_trace_error(log_module, "failed to poll: code=%lu", status);
+            std::abort();
+        }
+    }
     lock.lock();
 
-    process_events(context, lock, result);
+    if (event_count != 0) {
+        process_events(context, lock, event_count);
+    }
+
     process_timers(context, lock);
     process_futures(context, lock);
 

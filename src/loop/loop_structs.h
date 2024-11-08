@@ -10,17 +10,16 @@
 #include <vector>
 #include <list>
 
-#include <looper_types.h>
+#include "looper_types.h"
 
 #include "util/handles.h"
-#include "poll.h"
+#include "types_internal.h"
 
 namespace looper::impl {
 
 struct loop_context;
 
 using resource = handle;
-using resource_id = uint32_t;
 
 struct timer_data {
     using loop_callback = std::function<void(timer_data*)>;
@@ -77,7 +76,7 @@ struct event_data {
 
     explicit event_data(event handle)
         : handle(handle)
-        , event_obj(nullptr)
+        , event_obj(nullptr, nullptr)
         , user_callback(nullptr)
         , resource(empty_handle)
         , from_loop_callback(nullptr)
@@ -85,7 +84,7 @@ struct event_data {
 
     event handle;
 
-    std::shared_ptr<os::event> event_obj;
+    os::event_ptr event_obj;
     event_callback user_callback;
 
     // managed in loop
@@ -129,7 +128,7 @@ struct tcp_data {
 
     explicit tcp_data(tcp handle)
         : handle(handle)
-        , socket_obj(nullptr)
+        , socket_obj(nullptr, nullptr)
         , connect_callback(nullptr)
         , read_callback(nullptr)
         , write_requests()
@@ -145,7 +144,7 @@ struct tcp_data {
 
     tcp handle;
 
-    std::shared_ptr<os::tcp_socket> socket_obj;
+    os::tcp_ptr socket_obj;
     tcp_callback connect_callback;
     tcp_read_callback read_callback;
     std::deque<write_request> write_requests;
@@ -166,7 +165,7 @@ struct tcp_server_data {
 
     explicit tcp_server_data(tcp_server handle)
         : handle(handle)
-        , socket_obj(nullptr)
+        , socket_obj(nullptr, nullptr)
         , connect_callback(nullptr)
         , resource(empty_handle)
         , callback(nullptr)
@@ -174,7 +173,7 @@ struct tcp_server_data {
 
     tcp_server handle;
 
-    std::shared_ptr<os::tcp_server_socket> socket_obj;
+    os::tcp_ptr socket_obj;
     tcp_server_callback connect_callback;
 
     // managed in loop

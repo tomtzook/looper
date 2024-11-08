@@ -28,27 +28,23 @@ add_library(looper STATIC
         src/trace.cpp
         src/util/handles.h
         include/looper_except.h
-        src/poll.h
-        src/loop.h
-        src/loop.cpp
-        src/os/linux/epoll_poller.h
+        src/types_internal.h
+        src/loop/loop.h
+        src/loop/loop.cpp
         src/os/os.h
-        src/os/os.cpp
         src/os/linux/linux.h
-        src/os/linux/linux.cpp
-        src/os/factory.h
-        src/poll.cpp
         src/os/linux/epoll_poller.cpp
-        src/os/factory.cpp
         include/looper_tcp.h
-        src/os/linux/socket.h
-        src/os/linux/socket.cpp
-        src/os/except.h
-        src/loop_internal.h
-        src/loop_base.cpp
-        src/loop_tcp.cpp
-        src/loop_structs.h
-        src/util/util.h)
+        src/loop/loop_internal.h
+        src/loop/loop_base.cpp
+        src/loop/loop_tcp.cpp
+        src/loop/loop_structs.h
+        src/util/util.h
+        src/os/linux/linux_event.cpp
+        src/os/linux/linux_socket.cpp
+        src/os/factory.h
+        src/looper_base.h
+        src/looper_tcp.cpp)
 target_include_directories(looper
         PUBLIC
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -58,6 +54,9 @@ target_include_directories(looper
 
 add_executable(test1 test1.cpp)
 target_link_libraries(test1 looper)
+target_include_directories(test1
+        PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 add_executable(test2 test2.cpp)
 target_link_libraries(test2 looper)

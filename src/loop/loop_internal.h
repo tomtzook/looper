@@ -10,12 +10,12 @@
 #include <vector>
 #include <list>
 
-#include <looper_types.h>
-#include <looper_trace.h>
+#include "looper_types.h"
+#include "looper_trace.h"
 
 #include "util/handles.h"
 #include "util/util.h"
-#include "poll.h"
+#include "types_internal.h"
 #include "os/factory.h"
 #include "loop.h"
 
@@ -24,6 +24,11 @@ namespace looper::impl {
 #define loop_log_module "loop"
 
 using resource_callback = std::function<void(loop_context*, void*, event_types)>;
+
+static constexpr size_t max_events_for_process = 20;
+static constexpr size_t initial_reserve_size = 20;
+static constexpr auto initial_poll_timeout = std::chrono::milliseconds(1000);
+static constexpr auto min_poll_timeout = std::chrono::milliseconds(100);
 
 enum class events_update_type {
     override,
@@ -35,7 +40,6 @@ struct resource_data {
     explicit resource_data(resource handle)
         : our_handle(handle)
         , user_ptr(nullptr)
-        , resource_obj(nullptr)
         , descriptor(-1)
         , events(0)
         , callback(nullptr)
@@ -43,7 +47,6 @@ struct resource_data {
 
     resource our_handle;
     void* user_ptr;
-    std::shared_ptr<os::resource> resource_obj;
     os::descriptor descriptor;
     event_types events;
     resource_callback callback;
@@ -66,9 +69,10 @@ struct loop_context {
     loop_context();
 
     std::mutex m_mutex;
-    std::unique_ptr<poller> m_poller;
+    os::poller_ptr m_poller;
     std::chrono::milliseconds m_timeout;
-    std::shared_ptr<os::event> m_run_loop_event;
+    os::event_ptr m_run_loop_event;
+    os::poll::event_data m_event_data[max_events_for_process];
 
     bool stop;
     bool executing;
@@ -86,15 +90,11 @@ struct loop_context {
     uint8_t m_read_buffer[2048];
 };
 
-static constexpr size_t max_events_for_process = 20;
-static constexpr size_t initial_reserve_size = 20;
-static constexpr auto initial_poll_timeout = std::chrono::milliseconds(1000);
-static constexpr auto min_poll_timeout = std::chrono::milliseconds(100);
-
 std::chrono::milliseconds time_now();
 void signal_run(loop_context* context);
 
-resource add_resource(loop_context* context, std::shared_ptr<os::resource> resource,
+resource add_resource(loop_context* context,
+                      os::descriptor descriptor,
                       event_types events,
                       resource_callback&& callback,
                       void* user_ptr = nullptr);

@@ -1,19 +1,21 @@
 
-#include <looper_except.h>
-#include "epoll_poller.h"
+#include <sys/epoll.h>
 
+#include "types_internal.h"
+#include "linux.h"
 
-namespace looper::os {
+namespace looper::os::poll {
 
 static constexpr size_t default_events_buffer_size = 32;
 
-static descriptor create() {
+static looper::error create_epoll(os::descriptor& descriptor_out) {
     const auto fd = ::epoll_create1(0);
     if (fd < 0) {
-        throw_call_error();
+        return get_call_error();
     }
 
-    return fd;
+    descriptor_out = fd;
+    return error_success;
 }
 
 static uint32_t events_to_native(event_types events) {
@@ -52,96 +54,110 @@ static event_types native_to_events(uint32_t events) {
     return r_events;
 }
 
-epoll_poller::epoll_poller()
-    : m_descriptor(create())
-    , m_events(new epoll_event[default_events_buffer_size])
-    , m_events_buffer_size(default_events_buffer_size)
-    , m_data(m_events)
-{}
+struct poller {
+    os::descriptor fd;
+    epoll_event* events;
+    size_t events_buffer_size;
+};
 
-epoll_poller::~epoll_poller() {
-    ::close(m_descriptor);
+looper::error create(poller** poller_out) {
+    auto* _poller = reinterpret_cast<poller*>(malloc(sizeof(poller)));
+    if (_poller == nullptr) {
+        return error_allocation;
+    }
+
+    _poller->events = reinterpret_cast<epoll_event*>(malloc(sizeof(epoll_event) * default_events_buffer_size));
+    if (_poller->events == nullptr) {
+        free(_poller);
+        return error_allocation;
+    }
+    _poller->events_buffer_size = default_events_buffer_size;
+
+    os::descriptor descriptor;
+    auto status = create_epoll(descriptor);
+    if (status != error_success) {
+        free(_poller->events);
+        free(_poller);
+        return status;
+    }
+
+    _poller->fd = descriptor;
+
+    *poller_out = _poller;
+    return error_success;
 }
 
-void epoll_poller::add(os::descriptor descriptor, event_types events) {
+void close(poller* poller) {
+    ::close(poller->fd);
+
+    free(poller->events);
+    free(poller);
+}
+
+looper::error add(poller* poller, os::descriptor descriptor, event_types events) {
     epoll_event event{};
     event.events = events_to_native(events);
     event.data.fd = descriptor;
 
-    if (::epoll_ctl(m_descriptor, EPOLL_CTL_ADD, descriptor, &event)) {
-        throw_call_error();
+    if (::epoll_ctl(poller->fd, EPOLL_CTL_ADD, descriptor, &event)) {
+        return get_call_error();
     }
+
+    return error_success;
 }
 
-void epoll_poller::set(os::descriptor descriptor, event_types events) {
+looper::error set(poller* poller, os::descriptor descriptor, event_types events) {
     epoll_event event{};
     event.events = events_to_native(events);
     event.data.fd = descriptor;
 
-    if (::epoll_ctl(m_descriptor, EPOLL_CTL_MOD, descriptor, &event)) {
-        throw_call_error();
+    if (::epoll_ctl(poller->fd, EPOLL_CTL_MOD, descriptor, &event)) {
+        return get_call_error();
     }
+
+    return error_success;
 }
 
-void epoll_poller::remove(os::descriptor descriptor) {
+looper::error remove(poller* poller, os::descriptor descriptor) {
     epoll_event event{};
     event.events = 0;
     event.data.fd = descriptor;
 
-    if (::epoll_ctl(m_descriptor, EPOLL_CTL_DEL, descriptor, &event)) {
-        throw_call_error();
+    if (::epoll_ctl(poller->fd, EPOLL_CTL_DEL, descriptor, &event)) {
+        return get_call_error();
     }
+
+    return error_success;
 }
 
-polled_events epoll_poller::poll(size_t max_events, std::chrono::milliseconds timeout) {
-    if (max_events > m_events_buffer_size) {
-        m_events.reset(new epoll_event[max_events]);
-        m_events_buffer_size = max_events;
-        m_data.reset_events(m_events);
-    }
-
-    auto* events = reinterpret_cast<epoll_event*>(m_events.get());
-    const auto count = ::epoll_wait(m_descriptor, events, static_cast<int>(max_events), static_cast<int>(timeout.count()));
-    if (count < 0) {
-        const auto error = get_call_error();
-        if (error == error_interrupted) {
-            // timeout has occurred
-            m_data.set_count(0);
-            return polled_events{&m_data};
+looper::error poll(poller* poller, size_t max_events, std::chrono::milliseconds timeout, event_data* events, size_t& event_count) {
+    if (max_events > poller->events_buffer_size) {
+        auto* _events = reinterpret_cast<epoll_event*>(malloc(sizeof(epoll_event) * max_events));
+        if (_events == nullptr) {
+            return error_allocation;
         }
 
-        throw_call_error();
+        free(poller->events);
+
+        poller->events_buffer_size = max_events;
+        poller->events = _events;
     }
 
-    m_data.set_count(count);
-    return polled_events{&m_data};
-}
+    const auto count = ::epoll_wait(poller->fd, poller->events, static_cast<int>(max_events), static_cast<int>(timeout.count()));
+    if (count < 0) {
+        return get_call_error();
+    }
 
-epoll_poller::epoll_event_data::epoll_event_data(std::shared_ptr<epoll_event[]> events)
-    : m_events(std::move(events))
-    , m_count(0)
-{}
+    for (int i = 0; i < count; i++) {
+        auto& event = poller->events[i];
+        auto& event_out = events[i];
 
-void epoll_poller::epoll_event_data::reset_events(std::shared_ptr<epoll_event[]> events) {
-    m_events.swap(events);
-}
+        event_out.descriptor = event.data.fd;
+        event_out.events = native_to_events(event.events);
+    }
 
-size_t epoll_poller::epoll_event_data::count() const {
-    return m_count;
-}
-
-void epoll_poller::epoll_event_data::set_count(size_t count) {
-    m_count = count;
-}
-
-descriptor epoll_poller::epoll_event_data::get_descriptor(size_t index) const {
-    const auto* events = reinterpret_cast<epoll_event*>(m_events.get());
-    return static_cast<descriptor>(events[index].data.fd);
-}
-
-event_types epoll_poller::epoll_event_data::get_events(size_t index) const {
-    const auto* events = reinterpret_cast<epoll_event*>(m_events.get());
-    return native_to_events(events[index].events);
+    event_count = count;
+    return error_success;
 }
 
 }

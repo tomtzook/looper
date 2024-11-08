@@ -3,6 +3,7 @@
 #include <memory>
 
 #include <looper_types.h>
+#include "types_internal.h"
 
 namespace looper::os {
 
@@ -13,51 +14,63 @@ namespace looper::os {
 
 using descriptor = int;
 
-class resource {
-public:
-    virtual ~resource() = default;
+namespace event {
 
-    [[nodiscard]] virtual descriptor get_descriptor() const = 0;
+struct event;
+
+looper::error create(event** event_out);
+void close(event* event);
+
+descriptor get_descriptor(event* event);
+
+looper::error set(event* event);
+looper::error clear(event* event);
+
+}
+
+namespace tcp {
+
+struct tcp;
+
+looper::error create(tcp** tcp_out);
+void close(tcp* tcp);
+
+descriptor get_descriptor(tcp* tcp);
+
+looper::error get_internal_error(tcp* tcp, looper::error& error_out);
+
+looper::error bind(tcp* tcp, uint16_t port);
+looper::error bind(tcp* tcp, std::string_view ip, uint16_t port);
+
+looper::error connect(tcp* tcp, std::string_view ip, uint16_t port);
+looper::error finalize_connect(tcp* tcp);
+
+looper::error read(tcp* tcp, uint8_t* buffer, size_t buffer_size, size_t& read_out);
+looper::error write(tcp* tcp, const uint8_t* buffer, size_t size, size_t& written_out);
+
+looper::error listen(tcp* tcp, size_t backlog_size);
+looper::error accept(tcp* this_tcp, tcp** tcp_out);
+
+}
+
+namespace poll {
+
+struct event_data {
+    os::descriptor descriptor;
+    event_types events;
 };
 
-class event : public resource {
-public:
-    virtual ~event() override = default;
+struct poller;
 
-    virtual void set() = 0;
-    virtual void clear() = 0;
-};
+looper::error create(poller** poller_out);
+void close(poller* poller);
 
-class tcp_socket : public resource {
-public:
-    virtual ~tcp_socket() override = default;
+looper::error add(poller* poller, os::descriptor descriptor, event_types events);
+looper::error set(poller* poller, os::descriptor descriptor, event_types events);
+looper::error remove(poller* poller, os::descriptor descriptor);
 
-    [[nodiscard]] virtual error get_internal_error() = 0;
+looper::error poll(poller* poller, size_t max_events, std::chrono::milliseconds timeout, event_data* events, size_t& event_count);
 
-    virtual void close() = 0;
-
-    virtual void bind(uint16_t port) = 0;
-
-    virtual bool connect(std::string_view ip, uint16_t port) = 0;
-    virtual void finalize_connect() = 0;
-
-    virtual size_t read(uint8_t* buffer, size_t buffer_size) = 0;
-    virtual size_t write(const uint8_t* buffer, size_t size) = 0;
-};
-
-class tcp_server_socket : public resource {
-public:
-    virtual ~tcp_server_socket() override = default;
-
-    [[nodiscard]] virtual error get_internal_error() = 0;
-
-    virtual void close() = 0;
-
-    virtual void bind(uint16_t port) = 0;
-    virtual void bind(std::string_view ip, uint16_t port) = 0;
-
-    virtual void listen(size_t backlog_size) = 0;
-    virtual std::shared_ptr<tcp_socket> accept() = 0;
-};
+}
 
 }

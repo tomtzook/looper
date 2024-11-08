@@ -7,9 +7,9 @@ namespace looper::impl {
 
 loop_context::loop_context()
         : m_mutex()
-        , m_poller(os::create_poller())
+        , m_poller(os::make_poller())
         , m_timeout(initial_poll_timeout)
-        , m_run_loop_event(os::create_event())
+        , m_run_loop_event(os::make_event())
         , stop(false)
         , executing(false)
         , m_run_finished()
@@ -33,15 +33,12 @@ std::chrono::milliseconds time_now() {
 
 void signal_run(loop_context* context) {
     looper_trace_debug(log_module, "signalling loop run: context=0x%x", context);
-
-    context->m_run_loop_event->set();
+    os::event::clear(context->m_run_loop_event.get());
 }
 
-resource add_resource(loop_context* context, std::shared_ptr<os::resource> resource,
+resource add_resource(loop_context* context, os::descriptor descriptor,
                       event_types events, resource_callback&& callback,
                       void* user_ptr) {
-    const auto descriptor = resource->get_descriptor();
-
     auto it = context->m_descriptor_map.find(descriptor);
     if (it != context->m_descriptor_map.end()) {
         throw std::runtime_error("resource already added");
@@ -49,7 +46,6 @@ resource add_resource(loop_context* context, std::shared_ptr<os::resource> resou
 
     auto [handle, data] = context->m_resource_table.allocate_new();
     data->user_ptr = user_ptr;
-    data->resource_obj = std::move(resource);
     data->descriptor = descriptor;
     data->events = 0;
     data->callback = std::move(callback);
@@ -72,7 +68,7 @@ void remove_resource(loop_context* context, resource resource) {
     looper_trace_debug(log_module, "removing resource: context=0x%x, handle=%lu", context, resource);
 
     context->m_descriptor_map.erase(data->descriptor);
-    context->m_poller->remove(data->descriptor);
+    os::poll::remove(context->m_poller.get(), data->descriptor);
 
     signal_run(context);
 }

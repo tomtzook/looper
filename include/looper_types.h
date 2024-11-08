@@ -10,6 +10,7 @@ namespace looper {
 using handle = uint32_t;
 using error = int32_t;
 
+static constexpr auto error_unknown = static_cast<error>(-1);
 static constexpr handle empty_handle = static_cast<handle>(-1);
 static constexpr auto no_timeout = std::chrono::milliseconds(0);
 static constexpr auto no_delay = std::chrono::milliseconds(0);
@@ -35,7 +36,9 @@ enum : error {
     error_fd_closed,
     error_again,
     error_in_progress,
-    error_interrupted
+    error_interrupted,
+    error_operation_not_supported,
+    error_allocation
 };
 
 }
