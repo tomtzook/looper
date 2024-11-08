@@ -3,6 +3,7 @@
 
 #include <looper.h>
 #include <looper_tcp.h>
+#include <cstring>
 
 #include "util/handles.h"
 #include "util/util.h"
@@ -161,31 +162,32 @@ static void timer_loop_callback(impl::timer_data* timer) {
     invoke_func_nolock("timer_user_callback", timer->user_callback, loop, timer->handle);
 }
 
-static void tcp_loop_callback(impl::tcp_data* tcp, impl::tcp_data::cause cause, impl::tcp_data::cause_data cause_data, looper::error error) {
+static void _tcp_read_callback(impl::tcp_data* tcp, std::span<const uint8_t> buffer, looper::error error) {
     auto loop = get_loop_handle(tcp->handle);
 
-    switch (cause) {
-        case impl::tcp_data::cause::connect:
-            looper_trace_debug(log_module, "tcp connect finished: loop=%lu, handle=%lu, error=%lu", loop, tcp->handle, error);
-            invoke_func_nolock("tcp_connect_callback", tcp->connect_callback, loop, tcp->handle, error);
-            break;
-        case impl::tcp_data::cause::write_finished:
-            looper_trace_debug(log_module, "tcp writing finished: loop=%lu, handle=%lu, error=%lu", loop, tcp->handle, error);
-            invoke_func_nolock("tcp_write_callback", tcp->write_callback, loop, tcp->handle, error);
-            break;
-        case impl::tcp_data::cause::read:
-            looper_trace_debug(log_module, "tcp read new data: loop=%lu, handle=%lu, error=%lu", loop, tcp->handle, error);
-            invoke_func_nolock("tcp_read_callback", tcp->read_callback, loop, tcp->handle, cause_data.read.data, error);
-            break;
-        case impl::tcp_data::cause::error:
-            looper_trace_debug(log_module, "tcp error: loop=%lu, handle=%lu, error=%lu", loop, tcp->handle, error);
-            // todo: how to pass to user?
-            std::abort();
-            break;
-        default:
-            looper_trace_debug(log_module, "tcp callback called with unknown cause: loop=%lu, handle=%lu, cause=%lu", loop, tcp->handle, static_cast<uint16_t>(cause));
-            break;
-    }
+    looper_trace_debug(log_module, "tcp read new data: loop=%lu, handle=%lu, error=%lu", loop, tcp->handle, error);
+    invoke_func_nolock("tcp_read_callback", tcp->read_callback, loop, tcp->handle, buffer, error);
+}
+
+static void _tcp_write_callback(impl::tcp_data* tcp, impl::tcp_data::write_request& request, looper::error error) {
+    auto loop = get_loop_handle(tcp->handle);
+
+    looper_trace_debug(log_module, "tcp writing finished: loop=%lu, handle=%lu, error=%lu", loop, tcp->handle, error);
+    invoke_func_nolock("tcp_write_callback", request.write_callback, loop, tcp->handle, error);
+}
+
+static void _tcp_connect_callback(impl::tcp_data* tcp, looper::error error) {
+    auto loop = get_loop_handle(tcp->handle);
+
+    looper_trace_debug(log_module, "tcp connect finished: loop=%lu, handle=%lu, error=%lu", loop, tcp->handle, error);
+    invoke_func_nolock("tcp_connect_callback", tcp->connect_callback, loop, tcp->handle, error);
+}
+
+static void _tcp_error_callback(impl::tcp_data* tcp, looper::error error) {
+    auto loop = get_loop_handle(tcp->handle);
+
+    looper_trace_debug(log_module, "tcp hung/error: loop=%lu, handle=%lu, error=%lu", loop, tcp->handle, error);
+    // todo: what now? close socket and report?
 }
 
 static void tcp_server_loop_callback(impl::tcp_server_data* tcp) {
@@ -508,7 +510,10 @@ tcp create_tcp(loop loop) {
     auto& data = get_loop(loop);
 
     auto [handle, tcp_data] = data.m_tcps.allocate_new();
-    tcp_data->callback = tcp_loop_callback;
+    tcp_data->l_read_callback = _tcp_read_callback;
+    tcp_data->l_write_callback = _tcp_write_callback;
+    tcp_data->l_connect_callback = _tcp_connect_callback;
+    tcp_data->l_error_callback = _tcp_error_callback;
     tcp_data->socket_obj = os::create_tcp_socket();
     tcp_data->state = impl::tcp_data::state::open;
 
@@ -593,8 +598,17 @@ void write_tcp(tcp tcp, std::span<const uint8_t> buffer, tcp_callback&& callback
     looper_trace_info(log_module, "writing to tcp: loop=%lu, handle=%lu, data_size=%lu", data.m_handle, tcp, buffer.size_bytes());
 
     auto& tcp_data = data.m_tcps[tcp];
-    tcp_data.write_callback = std::move(callback);
-    impl::write_tcp(data.m_context, &tcp_data, buffer);
+
+    const auto buffer_size = buffer.size_bytes();
+    impl::tcp_data::write_request request;
+    request.buffer = std::unique_ptr<uint8_t[]>(new uint8_t[buffer_size]);
+    request.pos = 0;
+    request.size = buffer.size_bytes();
+    request.write_callback = std::move(callback);
+
+    memcpy(request.buffer.get(), buffer.data(), buffer_size);
+
+    impl::write_tcp(data.m_context, &tcp_data, std::move(request));
 }
 
 tcp_server create_tcp_server(loop loop) {
@@ -677,7 +691,10 @@ tcp accept_tcp(tcp_server tcp) {
     auto socket = tcp_server_data.socket_obj->accept();
 
     auto [handle, tcp_data] = data.m_tcps.allocate_new();
-    tcp_data->callback = tcp_loop_callback;
+    tcp_data->l_read_callback = _tcp_read_callback;
+    tcp_data->l_write_callback = _tcp_write_callback;
+    tcp_data->l_connect_callback = _tcp_connect_callback;
+    tcp_data->l_error_callback = _tcp_error_callback;
     tcp_data->socket_obj = std::move(socket);
     tcp_data->state = impl::tcp_data::state::connected;
 

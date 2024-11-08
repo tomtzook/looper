@@ -31,7 +31,7 @@ void remove_tcp(loop_context* context, tcp_data* tcp);
 void connect_tcp(loop_context* context, tcp_data* tcp, std::string_view server_address, uint16_t server_port);
 void start_tcp_read(loop_context* context, tcp_data* tcp);
 void stop_tcp_read(loop_context* context, tcp_data* tcp);
-void write_tcp(loop_context* context, tcp_data* tcp, std::span<const uint8_t> buffer);
+void write_tcp(loop_context* context, tcp_data* tcp, tcp_data::write_request&& request);
 
 void add_tcp_server(loop_context* context, tcp_server_data* tcp);
 void remove_tcp_server(loop_context* context, tcp_server_data* tcp);

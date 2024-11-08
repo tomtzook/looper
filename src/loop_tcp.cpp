@@ -8,6 +8,8 @@ namespace looper::impl {
 
 #define log_module loop_log_module "_tcp"
 
+// todo: we want os layer to be with errors and not exceptions to make sure we catch all errors.
+
 static void tcp_resource_handle_connecting(std::unique_lock<std::mutex>& lock, loop_context* context, tcp_data* tcp, event_types events) {
     if ((events & event_out) != 0) {
         // finish connect
@@ -25,10 +27,8 @@ static void tcp_resource_handle_connecting(std::unique_lock<std::mutex>& lock, l
         }
 
         request_resource_events(context, tcp->resource, event_out, events_update_type::remove);
-
-        tcp_data::cause_data cause_data{};
-        invoke_func<std::mutex, tcp_data*, tcp_data::cause, tcp_data::cause_data&, looper::error>
-                (lock, "tcp_loop_callback", tcp->callback, tcp, tcp_data::cause::connect, cause_data, error);
+        invoke_func<std::mutex, tcp_data*, looper::error>
+                (lock, "tcp_loop_callback", tcp->l_connect_callback, tcp, error);
     }
 }
 
@@ -50,23 +50,44 @@ static void tcp_resource_handle_connected_read(std::unique_lock<std::mutex>& loc
         looper_trace_error(log_module, "tcp read error: ptr=0x%x, code=%lu", tcp, e.get_code());
     }
 
-    tcp_data::cause_data cause_data{};
-    cause_data.read.data = data;
-    invoke_func<std::mutex, tcp_data*, tcp_data::cause, tcp_data::cause_data&, looper::error>
-            (lock, "tcp_loop_callback", tcp->callback, tcp, tcp_data::cause::read, cause_data, error);
+    invoke_func<std::mutex, tcp_data*, std::span<const uint8_t>, looper::error>
+            (lock, "tcp_loop_callback", tcp->l_read_callback, tcp, data, error);
 }
 
 static void tcp_resource_handle_connected_write(std::unique_lock<std::mutex>& lock, loop_context* context, tcp_data* tcp) {
-    if (tcp->write_pending) {
-        tcp->write_pending = false;
-        looper_trace_debug(log_module, "tcp writing finished: ptr=0x%x", tcp);
-
-        tcp_data::cause_data cause_data{};
-        invoke_func<std::mutex, tcp_data*, tcp_data::cause, tcp_data::cause_data&, looper::error>
-                (lock, "tcp_loop_callback", tcp->callback, tcp, tcp_data::cause::write_finished, cause_data, 0);
+    if (!tcp->write_pending) {
+        request_resource_events(context, tcp->resource, event_out, events_update_type::remove);
+        return;
     }
 
-    request_resource_events(context, tcp->resource, event_out, events_update_type::remove);
+    auto& request = tcp->write_requests.front();
+
+    try {
+        // todo: better use of queues
+        // todo: use iovec
+        // todo: catch certain errors to try again: WOULDBLOCK, INTERRUPT
+        auto written = tcp->socket_obj->write(request.buffer.get() + request.pos, request.size);
+        request.pos += written;
+
+        if (request.pos < request.size) {
+            // didn't finish write
+            return;
+        }
+
+        tcp->write_requests.pop_front();
+        if (tcp->write_requests.empty()) {
+            tcp->write_pending = false;
+            request_resource_events(context, tcp->resource, event_out, events_update_type::remove);
+        }
+
+        looper_trace_debug(log_module, "tcp write request finished: ptr=0x%x", tcp);
+        invoke_func<std::mutex, tcp_data*, tcp_data::write_request&, looper::error>
+                (lock, "tcp_loop_callback", tcp->l_write_callback, tcp, request, 0);
+    } catch (const os_exception& e) {
+        looper_trace_error(log_module, "tcp write request failed: ptr=0x%x, code=%lu", tcp, e.get_code());
+        invoke_func<std::mutex, tcp_data*, tcp_data::write_request&, looper::error>
+                (lock, "tcp_loop_callback", tcp->l_write_callback, tcp, request, e.get_code());
+    }
 }
 
 static void tcp_resource_handle_connected(std::unique_lock<std::mutex>& lock, loop_context* context, tcp_data* tcp, event_types events) {
@@ -76,10 +97,7 @@ static void tcp_resource_handle_connected(std::unique_lock<std::mutex>& lock, lo
 
         const auto code = tcp->socket_obj->get_internal_error();
         looper_trace_error(log_module, "tcp hung/error: ptr=0x%x, code=%lu", tcp, code);
-
-        tcp_data::cause_data cause_data{};
-        invoke_func<std::mutex, tcp_data*, tcp_data::cause, tcp_data::cause_data&, looper::error>
-                (lock, "tcp_loop_callback", tcp->callback, tcp, tcp_data::cause::error, cause_data, code);
+        invoke_func<>(lock, "tcp_loop_callback", tcp->l_error_callback, tcp, code);
 
         return;
     }
@@ -175,10 +193,7 @@ void connect_tcp(loop_context* context, tcp_data* tcp, std::string_view server_a
             tcp->state = tcp_data::state::connected;
 
             looper_trace_info(log_module, "connected tcp inplace: ptr=0x%x", tcp);
-
-            tcp_data::cause_data cause_data{};
-            invoke_func<std::mutex, tcp_data*, tcp_data::cause, tcp_data::cause_data&, looper::error>
-                    (lock, "tcp_loop_callback", tcp->callback, tcp, tcp_data::cause::connect, cause_data, 0);
+            invoke_func<>(lock, "tcp_loop_callback", tcp->l_connect_callback, tcp, 0);
         } else {
             // wait for connection finish
             request_resource_events(context, tcp->resource, event_out, events_update_type::append);
@@ -186,13 +201,10 @@ void connect_tcp(loop_context* context, tcp_data* tcp, std::string_view server_a
             looper_trace_info(log_module, "tcp connection not finished: ptr=0x%x", tcp);
         }
     } catch (const os_exception& e) {
-        looper_trace_error(log_module, "tcp connection failed: ptr=0x%x, code=%s", tcp, e.get_code());
-
         tcp->state = tcp_data::state::errored;
 
-        tcp_data::cause_data cause_data{};
-        invoke_func<std::mutex, tcp_data*, tcp_data::cause, tcp_data::cause_data&, looper::error>
-                (lock, "tcp_loop_callback", tcp->callback, tcp, tcp_data::cause::connect, cause_data, e.get_code());
+        looper_trace_error(log_module, "tcp connection failed: ptr=0x%x, code=%s", tcp, e.get_code());
+        invoke_func<>(lock, "tcp_loop_callback", tcp->l_connect_callback, tcp, e.get_code());
     }
 }
 
@@ -234,7 +246,7 @@ void stop_tcp_read(loop_context* context, tcp_data* tcp) {
     request_resource_events(context, tcp->resource, event_in, events_update_type::remove);
 }
 
-void write_tcp(loop_context* context, tcp_data* tcp, std::span<const uint8_t> buffer) {
+void write_tcp(loop_context* context, tcp_data* tcp, tcp_data::write_request&& request) {
     std::unique_lock lock(context->m_mutex);
 
     if (tcp->resource == empty_handle) {
@@ -243,27 +255,14 @@ void write_tcp(loop_context* context, tcp_data* tcp, std::span<const uint8_t> bu
     if (tcp->state != tcp_data::state::connected) {
         throw std::runtime_error("tcp state invalid for write");
     }
-    if (tcp->write_pending) {
-        throw std::runtime_error("write already in progress");
-    }
 
-    looper_trace_info(log_module, "tcp writing: ptr=0x%x, buffer_size=%lu", tcp, buffer.size());
+    looper_trace_info(log_module, "tcp writing: ptr=0x%x, buffer_size=%lu", tcp, request.size);
 
-    try {
-        auto written = tcp->socket_obj->write(buffer.data(), buffer.size());
-        if (written != buffer.size()) {
-            // todo: handle internally
-            throw std::runtime_error("unable to write all buffer! implement solution");
-        }
+    tcp->write_requests.push_back(std::move(request));
 
+    if (!tcp->write_pending) {
         request_resource_events(context, tcp->resource, event_out, events_update_type::append);
         tcp->write_pending = true;
-    } catch (const os_exception& e) {
-        looper_trace_error(log_module, "tcp writing failed: ptr=0x%x, code=%lu", tcp, e.get_code());
-
-        tcp_data::cause_data cause_data{};
-        invoke_func<std::mutex, tcp_data*, tcp_data::cause, tcp_data::cause_data&, looper::error>
-            (lock, "tcp_loop_callback", tcp->callback, tcp, tcp_data::cause::write_finished, cause_data, e.get_code());
     }
 }
 

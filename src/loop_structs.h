@@ -104,9 +104,20 @@ struct tcp_data {
         struct {
             std::span<const uint8_t> data;
         } read;
+        struct {
+            tcp_callback callback = nullptr;
+        } write;
+    };
+    struct write_request {
+        std::unique_ptr<uint8_t[]> buffer;
+        size_t pos;
+        size_t size;
+        tcp_callback write_callback;
     };
 
-    using loop_callback = std::function<void(tcp_data*, cause, cause_data&, looper::error)>;
+    using loop_read_callback = std::function<void(tcp_data*, std::span<const uint8_t>, looper::error)>;
+    using loop_write_callback = std::function<void(tcp_data*, write_request&, looper::error)>;
+    using loop_callback = std::function<void(tcp_data*, looper::error)>;
 
     enum class state {
         init,
@@ -121,12 +132,15 @@ struct tcp_data {
         , socket_obj(nullptr)
         , connect_callback(nullptr)
         , read_callback(nullptr)
-        , write_callback(nullptr)
+        , write_requests()
         , resource(empty_handle)
         , state(state::init)
         , reading(false)
         , write_pending(false)
-        , callback(nullptr)
+        , l_read_callback(nullptr)
+        , l_write_callback(nullptr)
+        , l_connect_callback(nullptr)
+        , l_error_callback(nullptr)
     {}
 
     tcp handle;
@@ -134,14 +148,17 @@ struct tcp_data {
     std::shared_ptr<os::tcp_socket> socket_obj;
     tcp_callback connect_callback;
     tcp_read_callback read_callback;
-    tcp_callback write_callback;
+    std::deque<write_request> write_requests;
 
     // managed in loop
     looper::impl::resource resource;
     state state;
     bool reading;
     bool write_pending;
-    loop_callback callback;
+    loop_read_callback l_read_callback; // todo: too many callbacks
+    loop_write_callback l_write_callback;
+    loop_callback l_connect_callback;
+    loop_callback l_error_callback;
 };
 
 struct tcp_server_data {
