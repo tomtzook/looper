@@ -5,25 +5,72 @@ namespace looper::impl {
 
 #define log_module loop_log_module
 
+static void process_update(loop_context* context, update& update) {
+    if (!context->resource_table.has(update.handle)) {
+        return;
+    }
+
+    auto& data = context->resource_table[update.handle];
+
+    switch (update.type) {
+        case update::type_add: {
+            data.events = update.events;
+            auto status = os::poll::add(context->poller.get(), data.descriptor, data.events);
+            if (status != error_success) {
+                looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
+                std::abort();
+            }
+            break;
+        }
+        case update::type_new_events: {
+            data.events = update.events;
+            auto status = os::poll::set(context->poller.get(), data.descriptor, data.events);
+            if (status != error_success) {
+                looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
+                std::abort();
+            }
+            break;
+        }
+        case update::type_new_events_add: {
+            data.events |= update.events;
+            auto status = os::poll::set(context->poller.get(), data.descriptor, data.events);
+            if (status != error_success) {
+                looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
+                std::abort();
+            }
+            break;
+        }
+        case update::type_new_events_remove: {
+            data.events &= ~update.events;
+            auto status = os::poll::set(context->poller.get(), data.descriptor, data.events);
+            if (status != error_success) {
+                looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
+                std::abort();
+            }
+            break;
+        }
+    }
+}
+
 loop_context::loop_context()
-        : m_mutex()
-        , m_poller(os::make_poller())
-        , m_timeout(initial_poll_timeout)
-        , m_run_loop_event(os::make_event())
+        : mutex()
+        , poller(os::make_poller())
+        , timeout(initial_poll_timeout)
+        , run_loop_event(os::make_event())
         , stop(false)
         , executing(false)
-        , m_run_finished()
-        , m_resource_table(0, handles::type_resource)
-        , m_descriptor_map()
-        , m_futures()
-        , m_timers()
-        , m_updates()
-        , m_timer_call_holder()
-        , m_future_call_holder()
-        , m_read_buffer() {
-    m_updates.resize(initial_reserve_size);
-    m_timer_call_holder.reserve(initial_reserve_size);
-    m_future_call_holder.reserve(initial_reserve_size);
+        , run_finished()
+        , resource_table(0, handles::type_resource)
+        , descriptor_map()
+        , futures()
+        , timers()
+        , updates()
+        , timer_call_holder()
+        , future_call_holder()
+        , read_buffer() {
+    updates.resize(initial_reserve_size);
+    timer_call_holder.reserve(initial_reserve_size);
+    future_call_holder.reserve(initial_reserve_size);
 }
 
 std::chrono::milliseconds time_now() {
@@ -33,18 +80,18 @@ std::chrono::milliseconds time_now() {
 
 void signal_run(loop_context* context) {
     looper_trace_debug(log_module, "signalling loop run: context=0x%x", context);
-    os::event::clear(context->m_run_loop_event.get());
+    os::event::clear(context->run_loop_event.get());
 }
 
 resource add_resource(loop_context* context, os::descriptor descriptor,
                       event_types events, resource_callback&& callback,
                       void* user_ptr) {
-    auto it = context->m_descriptor_map.find(descriptor);
-    if (it != context->m_descriptor_map.end()) {
+    auto it = context->descriptor_map.find(descriptor);
+    if (it != context->descriptor_map.end()) {
         throw std::runtime_error("resource already added");
     }
 
-    auto [handle, data] = context->m_resource_table.allocate_new();
+    auto [handle, data] = context->resource_table.allocate_new();
     data->user_ptr = user_ptr;
     data->descriptor = descriptor;
     data->events = 0;
@@ -52,10 +99,10 @@ resource add_resource(loop_context* context, os::descriptor descriptor,
 
     looper_trace_debug(log_module, "adding resource: context=0x%x, handle=%lu, fd=%lu", context, handle, descriptor);
 
-    auto [_, data_ptr] = context->m_resource_table.assign(handle, std::move(data));
+    auto [_, data_ptr] = context->resource_table.assign(handle, std::move(data));
 
-    context->m_descriptor_map.emplace(descriptor, &data_ptr);
-    context->m_updates.push_back({handle, update::type_add, events});
+    context->descriptor_map.emplace(descriptor, &data_ptr);
+    context->updates.push_back({handle, update::type_add, events});
 
     signal_run(context);
 
@@ -63,18 +110,18 @@ resource add_resource(loop_context* context, os::descriptor descriptor,
 }
 
 void remove_resource(loop_context* context, resource resource) {
-    auto data = context->m_resource_table.release(resource);
+    auto data = context->resource_table.release(resource);
 
     looper_trace_debug(log_module, "removing resource: context=0x%x, handle=%lu", context, resource);
 
-    context->m_descriptor_map.erase(data->descriptor);
-    os::poll::remove(context->m_poller.get(), data->descriptor);
+    context->descriptor_map.erase(data->descriptor);
+    os::poll::remove(context->poller.get(), data->descriptor);
 
     signal_run(context);
 }
 
 void request_resource_events(loop_context* context, resource resource, event_types events, events_update_type type) {
-    auto& data = context->m_resource_table[resource];
+    auto& data = context->resource_table[resource];
 
     update::update_type update_type;
     switch (type) {
@@ -94,9 +141,50 @@ void request_resource_events(loop_context* context, resource resource, event_typ
     looper_trace_debug(log_module, "modifying resource events: context=0x%x, handle=%lu, type=%d, events=%lu",
                        context, resource, static_cast<uint8_t>(update_type), events);
 
-    context->m_updates.push_back({data.our_handle, update_type, events});
+    context->updates.push_back({data.our_handle, update_type, events});
     signal_run(context);
 }
 
+void process_updates(loop_context* context) {
+    while (!context->updates.empty()) {
+        auto& update = context->updates.front();
+        process_update(context, update);
+
+        context->updates.pop_front();
+    }
+}
+
+void process_events(loop_context* context, std::unique_lock<std::mutex>& lock, size_t event_count) {
+    for (int i = 0; i < event_count; i++) {
+        auto& event_data = context->event_data[i];
+
+        auto it = context->descriptor_map.find(event_data.descriptor);
+        if (it == context->descriptor_map.end()) {
+            // make sure to remove this fd, guess it somehow was left over
+            looper_trace_debug(log_module, "resource received events, but isn't attached to anything: fd=%lu", event_data.descriptor);
+
+            auto status = os::poll::remove(context->poller.get(), event_data.descriptor);
+            if (status != error_success) {
+                looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
+                std::abort();
+            }
+
+            continue;
+        }
+
+        auto* data = it->second;
+
+        auto adjusted_flags = (data->events & event_data.events);
+        if (adjusted_flags == 0) {
+            continue;
+        }
+
+        looper_trace_debug(log_module, "resource has events: context=0x%x, handle=%lu, events=%lu",
+                           context, data->our_handle, adjusted_flags);
+
+        invoke_func(lock, "resource_callback",
+                    data->callback, context, data->user_ptr, adjusted_flags);
+    }
+}
 
 }

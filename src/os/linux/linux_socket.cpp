@@ -4,7 +4,6 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <cerrno>
 
 #include "os/linux/linux.h"
 #include "os/os.h"

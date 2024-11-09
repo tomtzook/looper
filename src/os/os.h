@@ -7,11 +7,6 @@
 
 namespace looper::os {
 
-// todo: better os layer?
-//  maybe with error codes instead
-//  and structs instead of classes and oop
-//  and platform-independent error codes
-
 using descriptor = int;
 
 namespace event {

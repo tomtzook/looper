@@ -12,11 +12,11 @@ static void _tcp_read_callback(impl::tcp_data* tcp, std::span<const uint8_t> buf
     invoke_func_nolock("tcp_read_callback", tcp->read_callback, loop, tcp->handle, buffer, error);
 }
 
-static void _tcp_write_callback(impl::tcp_data* tcp, impl::tcp_data::write_request& request, looper::error error) {
+static void _tcp_write_callback(impl::tcp_data* tcp, impl::tcp_data::write_request& request) {
     auto loop = get_loop_handle(tcp->handle);
 
-    looper_trace_debug(log_module, "tcp writing finished: loop=%lu, handle=%lu, error=%lu", loop, tcp->handle, error);
-    invoke_func_nolock("tcp_write_callback", request.write_callback, loop, tcp->handle, error);
+    looper_trace_debug(log_module, "tcp writing finished: loop=%lu, handle=%lu, error=%lu", loop, tcp->handle, request.error);
+    invoke_func_nolock("tcp_write_callback", request.write_callback, loop, tcp->handle, request.error);
 }
 
 static void _tcp_connect_callback(impl::tcp_data* tcp, looper::error error) {

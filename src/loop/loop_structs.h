@@ -93,29 +93,17 @@ struct event_data {
 };
 
 struct tcp_data {
-    enum class cause {
-        connect,
-        write_finished,
-        read,
-        error
-    };
-    union cause_data {
-        struct {
-            std::span<const uint8_t> data;
-        } read;
-        struct {
-            tcp_callback callback = nullptr;
-        } write;
-    };
     struct write_request {
         std::unique_ptr<uint8_t[]> buffer;
         size_t pos;
         size_t size;
         tcp_callback write_callback;
+
+        looper::error error;
     };
 
     using loop_read_callback = std::function<void(tcp_data*, std::span<const uint8_t>, looper::error)>;
-    using loop_write_callback = std::function<void(tcp_data*, write_request&, looper::error)>;
+    using loop_write_callback = std::function<void(tcp_data*, write_request&)>;
     using loop_callback = std::function<void(tcp_data*, looper::error)>;
 
     enum class state {
@@ -132,6 +120,7 @@ struct tcp_data {
         , connect_callback(nullptr)
         , read_callback(nullptr)
         , write_requests()
+        , completed_write_requests()
         , resource(empty_handle)
         , state(state::init)
         , reading(false)
@@ -148,6 +137,7 @@ struct tcp_data {
     tcp_callback connect_callback;
     tcp_read_callback read_callback;
     std::deque<write_request> write_requests;
+    std::deque<write_request> completed_write_requests;
 
     // managed in loop
     looper::impl::resource resource;
