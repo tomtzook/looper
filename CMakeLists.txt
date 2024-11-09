@@ -19,32 +19,41 @@ endif ()
 
 add_compile_definitions(TRACE_LEVEL=${TRACE_LEVEL} TRACE_SINK=${TRACE_SINK})
 
-add_library(looper STATIC
+set(SOURCES
         include/looper.h
         include/looper_trace.h
         include/looper_types.h
+        include/looper_except.h
+        include/looper_tcp.h
+
+        src/util/util.h
+        src/util/handles.h
+        src/os/os.h
+        src/os/factory.h
+        src/loop/loop_structs.h
+        src/loop/loop_internal.h
+        src/loop/loop.h
+        src/types_internal.h
+        src/looper_base.h
 
         src/looper.cpp
+        src/looper_tcp.cpp
         src/trace.cpp
-        src/util/handles.h
-        include/looper_except.h
-        src/types_internal.h
-        src/loop/loop.h
         src/loop/loop.cpp
-        src/os/os.h
-        src/os/linux/linux.h
-        src/os/linux/epoll_poller.cpp
-        include/looper_tcp.h
-        src/loop/loop_internal.h
         src/loop/loop_base.cpp
         src/loop/loop_tcp.cpp
-        src/loop/loop_structs.h
-        src/util/util.h
-        src/os/linux/linux_event.cpp
-        src/os/linux/linux_socket.cpp
-        src/os/factory.h
-        src/looper_base.h
-        src/looper_tcp.cpp)
+)
+
+if (UNIX)
+    set(SOURCES ${SOURCES}
+            src/os/linux/linux.h
+            src/os/linux/linux_event.cpp
+            src/os/linux/linux_socket.cpp
+            src/os/linux/epoll_poller.cpp
+    )
+endif ()
+
+add_library(looper STATIC ${SOURCES})
 target_include_directories(looper
         PUBLIC
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
