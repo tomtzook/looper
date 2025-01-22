@@ -6,18 +6,22 @@ project(looper
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 
+include(GNUInstallDirs)
+
 if (NOT DEFINED TRACE_LEVEL)
-    set(TRACE_LEVEL 2)
+    set(TRACE_LEVEL 0)
 endif ()
 if (NOT DEFINED TRACE_SINK)
     if (UNIX)
-        set(TRACE_SINK 0) # 1
+        set(TRACE_SINK 1)
     else ()
         set(TRACE_SINK 0)
     endif ()
 endif ()
 
 add_compile_definitions(TRACE_LEVEL=${TRACE_LEVEL} TRACE_SINK=${TRACE_SINK})
+
+file(GLOB INCLUDE_FILES ${CMAKE_SOURCE_DIR}/include/*.h)
 
 set(SOURCES
         include/looper.h
@@ -57,6 +61,17 @@ add_library(looper STATIC ${SOURCES})
 target_include_directories(looper
         PUBLIC
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-            $<INSTALL_INTERFACE:looper>
+            $<INSTALL_INTERFACE:include/looper>
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+install(TARGETS looper EXPORT looper
+        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(FILES ${INCLUDE_FILES}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/looper)
+install(EXPORT looper
+        FILE looperConfig.cmake
+        NAMESPACE looper::
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/looper")
