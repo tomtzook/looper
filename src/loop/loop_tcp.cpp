@@ -6,22 +6,20 @@ namespace looper::impl {
 
 #define log_module loop_log_module "_tcp"
 
-static void tcp_resource_handle_connecting(std::unique_lock<std::mutex>& lock, loop_context* context, tcp_data* tcp, event_types events) {
-    if ((events & event_out) != 0) {
-        // finish connect
-        auto error = os::tcp::finalize_connect(tcp->socket_obj.get());
-        if (error == error_success) {
-            tcp->state = tcp_data::state::connected;
-            looper_trace_debug(log_module, "tcp connect finish: ptr=0x%x", tcp);
-        } else {
-            tcp->state = tcp_data::state::errored;
-            looper_trace_error(log_module, "tcp connect error: ptr=0x%x, code=%lu", tcp, error);
-        }
-
-        request_resource_events(context, tcp->resource, event_out, events_update_type::remove);
-        invoke_func<std::mutex, tcp_data*, looper::error>
-                (lock, "tcp_loop_callback", tcp->from_loop_connect_callback, tcp, error);
+static void tcp_resource_handle_connect(std::unique_lock<std::mutex>& lock, loop_context* context, tcp_data* tcp) {
+    // finish connect
+    auto error = os::tcp::finalize_connect(tcp->socket_obj.get());
+    if (error == error_success) {
+        tcp->state = tcp_data::state::connected;
+        looper_trace_debug(log_module, "tcp connect finish: ptr=0x%x", tcp);
+    } else {
+        tcp->state = tcp_data::state::errored;
+        looper_trace_error(log_module, "tcp connect error: ptr=0x%x, code=%lu", tcp, error);
     }
+
+    request_resource_events(context, tcp->resource, event_out, events_update_type::remove);
+    invoke_func<std::mutex, tcp_data*, looper::error>
+            (lock, "tcp_loop_callback", tcp->from_loop_connect_callback, tcp, error);
 }
 
 static void tcp_resource_handle_connected_read(std::unique_lock<std::mutex>& lock, loop_context* context, tcp_data* tcp) {
@@ -118,17 +116,6 @@ static void tcp_resource_handle_connected_write(std::unique_lock<std::mutex>& lo
     report_write_requests_finished(lock, tcp);
 }
 
-static void tcp_resource_handle_connected(std::unique_lock<std::mutex>& lock, loop_context* context, tcp_data* tcp, event_types events) {
-    if ((events & event_in) != 0) {
-        // new data
-        tcp_resource_handle_connected_read(lock, context, tcp);
-    }
-
-    if ((events & event_out) != 0) {
-        tcp_resource_handle_connected_write(lock, context, tcp);
-    }
-}
-
 static void tcp_resource_handler(loop_context* context, void* ptr, event_types events) {
     std::unique_lock lock(context->mutex);
 
@@ -138,12 +125,25 @@ static void tcp_resource_handler(loop_context* context, void* ptr, event_types e
     }
 
     switch (data->state) {
-        case tcp_data::state::connecting:
-            tcp_resource_handle_connecting(lock, context, data, events);
+        case tcp_data::state::connecting: {
+            if ((events & event_out) != 0) {
+                tcp_resource_handle_connect(lock, context, data);
+            }
+
             break;
-        case tcp_data::state::connected:
-            tcp_resource_handle_connected(lock, context, data, events);
+        }
+        case tcp_data::state::connected: {
+            if ((events & event_in) != 0) {
+                // new data
+                tcp_resource_handle_connected_read(lock, context, data);
+            }
+
+            if ((events & event_out) != 0) {
+                tcp_resource_handle_connected_write(lock, context, data);
+            }
+
             break;
+        }
         default:
             break;
     }
