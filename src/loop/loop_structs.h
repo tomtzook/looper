@@ -117,25 +117,24 @@ struct tcp_data {
     explicit tcp_data(tcp handle)
         : handle(handle)
         , socket_obj(nullptr, nullptr)
-        , connect_callback(nullptr)
-        , read_callback(nullptr)
+        , user_connect_callback(nullptr)
+        , user_read_callback(nullptr)
         , write_requests()
         , completed_write_requests()
         , resource(empty_handle)
         , state(state::init)
         , reading(false)
         , write_pending(false)
-        , l_read_callback(nullptr)
-        , l_write_callback(nullptr)
-        , l_connect_callback(nullptr)
-        , l_error_callback(nullptr)
+        , from_loop_read_callback(nullptr)
+        , from_loop_write_callback(nullptr)
+        , from_loop_connect_callback(nullptr)
     {}
 
     tcp handle;
 
     os::tcp_ptr socket_obj;
-    tcp_callback connect_callback;
-    tcp_read_callback read_callback;
+    tcp_callback user_connect_callback;
+    tcp_read_callback user_read_callback;
     std::deque<write_request> write_requests;
     std::deque<write_request> completed_write_requests;
 
@@ -144,10 +143,10 @@ struct tcp_data {
     state state;
     bool reading;
     bool write_pending;
-    loop_read_callback l_read_callback; // todo: too many callbacks
-    loop_write_callback l_write_callback;
-    loop_callback l_connect_callback;
-    loop_callback l_error_callback;
+
+    loop_read_callback from_loop_read_callback;
+    loop_write_callback from_loop_write_callback;
+    loop_callback from_loop_connect_callback;
 };
 
 struct tcp_server_data {

@@ -9,7 +9,7 @@ static void _tcp_read_callback(impl::tcp_data* tcp, std::span<const uint8_t> buf
     auto loop = get_loop_handle(tcp->handle);
 
     looper_trace_debug(log_module, "tcp read new data: loop=%lu, handle=%lu, error=%lu", loop, tcp->handle, error);
-    invoke_func_nolock("tcp_read_callback", tcp->read_callback, loop, tcp->handle, buffer, error);
+    invoke_func_nolock("tcp_read_callback", tcp->user_read_callback, loop, tcp->handle, buffer, error);
 }
 
 static void _tcp_write_callback(impl::tcp_data* tcp, impl::tcp_data::write_request& request) {
@@ -23,14 +23,7 @@ static void _tcp_connect_callback(impl::tcp_data* tcp, looper::error error) {
     auto loop = get_loop_handle(tcp->handle);
 
     looper_trace_debug(log_module, "tcp connect finished: loop=%lu, handle=%lu, error=%lu", loop, tcp->handle, error);
-    invoke_func_nolock("tcp_connect_callback", tcp->connect_callback, loop, tcp->handle, error);
-}
-
-static void _tcp_error_callback(impl::tcp_data* tcp, looper::error error) {
-    auto loop = get_loop_handle(tcp->handle);
-
-    looper_trace_debug(log_module, "tcp hung/error: loop=%lu, handle=%lu, error=%lu", loop, tcp->handle, error);
-    // todo: what now? close socket and report?
+    invoke_func_nolock("tcp_connect_callback", tcp->user_connect_callback, loop, tcp->handle, error);
 }
 
 static void tcp_server_loop_callback(impl::tcp_server_data* tcp) {
@@ -46,10 +39,9 @@ tcp create_tcp(loop loop) {
     auto& data = get_loop(loop);
 
     auto [handle, tcp_data] = data.m_tcps.allocate_new();
-    tcp_data->l_read_callback = _tcp_read_callback;
-    tcp_data->l_write_callback = _tcp_write_callback;
-    tcp_data->l_connect_callback = _tcp_connect_callback;
-    tcp_data->l_error_callback = _tcp_error_callback;
+    tcp_data->from_loop_read_callback = _tcp_read_callback;
+    tcp_data->from_loop_write_callback = _tcp_write_callback;
+    tcp_data->from_loop_connect_callback = _tcp_connect_callback;
     tcp_data->socket_obj = os::make_tcp();
     tcp_data->state = impl::tcp_data::state::open;
 
@@ -97,7 +89,7 @@ void connect_tcp(tcp tcp, std::string_view server_address, uint16_t server_port,
     looper_trace_info(log_module, "connecting tcp: loop=%lu, handle=%lu, address=%s, port=%d", data.m_handle, tcp, server_address.data(), server_port);
 
     auto& tcp_data = data.m_tcps[tcp];
-    tcp_data.connect_callback = std::move(callback);
+    tcp_data.user_connect_callback = std::move(callback);
     impl::connect_tcp(data.m_context, &tcp_data, server_address, server_port);
 }
 
@@ -109,7 +101,7 @@ void start_tcp_read(tcp tcp, tcp_read_callback&& callback) {
     looper_trace_info(log_module, "starting tcp read: loop=%lu, handle=%lu", data.m_handle, tcp);
 
     auto& tcp_data = data.m_tcps[tcp];
-    tcp_data.read_callback = std::move(callback);
+    tcp_data.user_read_callback = std::move(callback);
     impl::start_tcp_read(data.m_context, &tcp_data);
 }
 
@@ -225,10 +217,9 @@ tcp accept_tcp(tcp_server tcp) {
     auto socket = os::make_tcp(tcp_struct);
 
     auto [handle, tcp_data] = data.m_tcps.allocate_new();
-    tcp_data->l_read_callback = _tcp_read_callback;
-    tcp_data->l_write_callback = _tcp_write_callback;
-    tcp_data->l_connect_callback = _tcp_connect_callback;
-    tcp_data->l_error_callback = _tcp_error_callback;
+    tcp_data->from_loop_read_callback = _tcp_read_callback;
+    tcp_data->from_loop_write_callback = _tcp_write_callback;
+    tcp_data->from_loop_connect_callback = _tcp_connect_callback;
     tcp_data->socket_obj = std::move(socket);
     tcp_data->state = impl::tcp_data::state::connected;
 

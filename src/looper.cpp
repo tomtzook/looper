@@ -278,7 +278,6 @@ void set_event(event event) {
     looper_trace_debug(log_module, "setting event: loop=%lu, handle=%lu", data.m_handle, event);
 
     auto& event_data = data.m_events[event];
-    // todo: perhaps reports errors via callback only
     OS_CHECK_THROW(os::event::set(event_data.event_obj.get()));
 }
 

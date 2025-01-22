@@ -194,8 +194,6 @@ void remove_future(loop_context* context, future_data* future) {
 void exec_future(loop_context* context, future_data* future) {
     std::unique_lock lock(context->mutex);
 
-    // todo: there is no guarantee to execute exactly after the delay
-
     future->finished = false;
     future->execute_time = time_now() + future->delay;
 

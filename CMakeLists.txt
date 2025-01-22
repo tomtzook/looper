@@ -60,21 +60,3 @@ target_include_directories(looper
             $<INSTALL_INTERFACE:looper>
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src)
-
-add_executable(test1 test1.cpp)
-target_link_libraries(test1 looper)
-target_include_directories(test1
-        PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src)
-
-add_executable(test2 test2.cpp)
-target_link_libraries(test2 looper)
-
-add_executable(test3 test3.cpp)
-target_link_libraries(test3 looper)
-
-add_executable(test4 test4.cpp)
-target_link_libraries(test4 looper)
-
-add_executable(test5 test5.cpp)
-target_link_libraries(test5 looper)

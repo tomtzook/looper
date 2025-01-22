@@ -5,6 +5,9 @@ namespace looper::impl {
 
 #define log_module loop_log_module
 
+constexpr event_types must_have_events = event_error | event_hung;
+
+
 static void process_update(loop_context* context, update& update) {
     if (!context->resource_table.has(update.handle)) {
         return;
@@ -14,7 +17,7 @@ static void process_update(loop_context* context, update& update) {
 
     switch (update.type) {
         case update::type_add: {
-            data.events = update.events;
+            data.events = update.events | must_have_events;
             auto status = os::poll::add(context->poller.get(), data.descriptor, data.events);
             if (status != error_success) {
                 looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
@@ -23,7 +26,7 @@ static void process_update(loop_context* context, update& update) {
             break;
         }
         case update::type_new_events: {
-            data.events = update.events;
+            data.events = update.events | must_have_events;
             auto status = os::poll::set(context->poller.get(), data.descriptor, data.events);
             if (status != error_success) {
                 looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
@@ -32,7 +35,7 @@ static void process_update(loop_context* context, update& update) {
             break;
         }
         case update::type_new_events_add: {
-            data.events |= update.events;
+            data.events |= update.events | must_have_events;
             auto status = os::poll::set(context->poller.get(), data.descriptor, data.events);
             if (status != error_success) {
                 looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
@@ -42,6 +45,7 @@ static void process_update(loop_context* context, update& update) {
         }
         case update::type_new_events_remove: {
             data.events &= ~update.events;
+            data.events |= must_have_events;
             auto status = os::poll::set(context->poller.get(), data.descriptor, data.events);
             if (status != error_success) {
                 looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
@@ -172,18 +176,24 @@ void process_events(loop_context* context, std::unique_lock<std::mutex>& lock, s
             continue;
         }
 
-        auto* data = it->second;
+        auto* resource_data = it->second;
 
-        auto adjusted_flags = (data->events & event_data.events);
+        if ((event_data.events & (event_error | event_hung)) != 0) {
+            // we got an error on the resource, push it into the resource handler by marking
+            // other flags as active and let the syscalls handle it then
+            event_data.events |= resource_data->events & (event_out | event_in);
+        }
+
+        auto adjusted_flags = (resource_data->events & event_data.events);
         if (adjusted_flags == 0) {
             continue;
         }
 
         looper_trace_debug(log_module, "resource has events: context=0x%x, handle=%lu, events=%lu",
-                           context, data->our_handle, adjusted_flags);
+                           context, resource_data->our_handle, adjusted_flags);
 
         invoke_func(lock, "resource_callback",
-                    data->callback, context, data->user_ptr, adjusted_flags);
+                    resource_data->callback, context, resource_data->user_ptr, adjusted_flags);
     }
 }
 
