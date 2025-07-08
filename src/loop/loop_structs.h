@@ -7,13 +7,8 @@
 #include <condition_variable>
 #include <span>
 #include <chrono>
-#include <vector>
-#include <list>
 
 #include "looper_types.h"
-
-#include "util/handles.h"
-#include "types_internal.h"
 
 namespace looper::impl {
 
@@ -24,13 +19,13 @@ using resource = handle;
 struct timer_data {
     using loop_callback = std::function<void(timer_data*)>;
 
-    explicit timer_data(timer handle)
+    explicit timer_data(const timer handle)
         : handle(handle)
         , running(false)
         , hit(false)
         , timeout(0)
-        , next_timestamp(0)
         , user_callback(nullptr)
+        , next_timestamp(0)
         , from_loop_callback(nullptr)
     {}
 
@@ -49,7 +44,7 @@ struct timer_data {
 struct future_data {
     using loop_callback = std::function<void(future_data*)>;
 
-    explicit future_data(future handle)
+    explicit future_data(const future handle)
         : handle(handle)
         , delay(0)
         , exec_finished()
@@ -74,7 +69,7 @@ struct future_data {
 struct event_data {
     using loop_callback = std::function<void(event_data*)>;
 
-    explicit event_data(event handle)
+    explicit event_data(const event handle)
         : handle(handle)
         , event_obj(nullptr, nullptr)
         , user_callback(nullptr)
@@ -152,7 +147,7 @@ struct tcp_data {
 struct tcp_server_data {
     using loop_callback = std::function<void(tcp_server_data*)>;
 
-    explicit tcp_server_data(tcp_server handle)
+    explicit tcp_server_data(const tcp_server handle)
         : handle(handle)
         , socket_obj(nullptr, nullptr)
         , connect_callback(nullptr)

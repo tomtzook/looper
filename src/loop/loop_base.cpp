@@ -71,7 +71,8 @@ loop_context::loop_context()
         , updates()
         , timer_call_holder()
         , future_call_holder()
-        , read_buffer() {
+        , read_buffer()
+        , event_data{} {
     updates.resize(initial_reserve_size);
     timer_call_holder.reserve(initial_reserve_size);
     future_call_holder.reserve(initial_reserve_size);
@@ -87,9 +88,12 @@ void signal_run(loop_context* context) {
     os::event::set(context->run_loop_event.get());
 }
 
-resource add_resource(loop_context* context, os::descriptor descriptor,
-                      event_types events, resource_callback&& callback,
-                      void* user_ptr) {
+resource add_resource(
+    loop_context* context,
+    os::descriptor descriptor,
+    const event_types events,
+    resource_callback&& callback,
+    void* user_ptr) {
     auto it = context->descriptor_map.find(descriptor);
     if (it != context->descriptor_map.end()) {
         throw std::runtime_error("resource already added");
@@ -124,7 +128,11 @@ void remove_resource(loop_context* context, resource resource) {
     signal_run(context);
 }
 
-void request_resource_events(loop_context* context, resource resource, event_types events, events_update_type type) {
+void request_resource_events(
+    loop_context* context,
+    resource resource,
+    const event_types events,
+    const events_update_type type) {
     auto& data = context->resource_table[resource];
 
     update::update_type update_type;
@@ -158,7 +166,7 @@ void process_updates(loop_context* context) {
     }
 }
 
-void process_events(loop_context* context, std::unique_lock<std::mutex>& lock, size_t event_count) {
+void process_events(loop_context* context, std::unique_lock<std::mutex>& lock, const size_t event_count) {
     for (int i = 0; i < event_count; i++) {
         auto& event_data = context->event_data[i];
 

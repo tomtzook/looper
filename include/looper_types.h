@@ -24,6 +24,9 @@ using tcp_server = handle;
 using udp = handle;
 using file = handle;
 
+template<typename T>
+concept stream_handle = std::is_same_v<T, tcp> || std::is_same_v<T, file>;
+
 struct inet_address {
     std::string_view ip;
     uint16_t port;
@@ -40,6 +43,9 @@ using udp_callback = std::function<void(loop, udp, error)>;
 using udp_read_callback = std::function<void(loop, udp, inet_address, std::span<const uint8_t>, error)>;
 using file_callback = std::function<void(loop, file, error)>;
 using file_read_callback = std::function<void(loop, file, std::span<const uint8_t>, error)>;
+
+using read_callback = std::function<void(loop, handle, std::span<const uint8_t>, error)>;
+using write_callback = std::function<void(loop, handle, error)>;
 
 enum : error {
     error_success = 0,

@@ -31,6 +31,7 @@ set(SOURCES
         include/looper_tcp.h
         include/looper_udp.h
         include/looper_file.h
+        include/looper_stream.h
 
         src/util/util.h
         src/util/handles.h
@@ -52,7 +53,7 @@ set(SOURCES
         src/loop/loop_tcp.cpp
         src/loop/loop_udp.cpp
         src/loop/loop_file.cpp
-        src/os/linux/linux_io.cpp
+        src/loop/loop_stream.cpp
 )
 
 if (UNIX)
@@ -62,6 +63,7 @@ if (UNIX)
             src/os/linux/linux_socket.cpp
             src/os/linux/epoll_poller.cpp
             src/os/linux/linux_file.cpp
+            src/os/linux/linux_io.cpp
     )
 endif ()
 

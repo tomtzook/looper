@@ -39,7 +39,7 @@ enum class events_update_type {
 };
 
 struct resource_data {
-    explicit resource_data(resource handle)
+    explicit resource_data(const resource handle)
         : our_handle(handle)
         , user_ptr(nullptr)
         , descriptor(-1)
