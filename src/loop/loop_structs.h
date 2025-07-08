@@ -220,4 +220,54 @@ struct udp_data {
     loop_write_callback from_loop_write_callback;
 };
 
+struct file_data {
+    struct write_request {
+        std::unique_ptr<uint8_t[]> buffer;
+        size_t pos;
+        size_t size;
+        file_callback write_callback;
+
+        looper::error error;
+    };
+
+    using loop_read_callback = std::function<void(file_data*, std::span<const uint8_t>, looper::error)>;
+    using loop_write_callback = std::function<void(file_data*, write_request&)>;
+
+    enum class state {
+        init,
+        errored,
+        open
+    };
+
+    explicit file_data(file handle)
+        : handle(handle)
+        , file_obj(nullptr, nullptr)
+        , user_read_callback(nullptr)
+        , write_requests()
+        , completed_write_requests()
+        , resource(empty_handle)
+        , state(state::init)
+        , reading(false)
+        , write_pending(false)
+        , from_loop_read_callback(nullptr)
+        , from_loop_write_callback(nullptr)
+    {}
+
+    file handle;
+
+    os::file_ptr file_obj;
+    file_read_callback user_read_callback;
+    std::deque<write_request> write_requests;
+    std::deque<write_request> completed_write_requests;
+
+    // managed in loop
+    looper::impl::resource resource;
+    state state;
+    bool reading;
+    bool write_pending;
+
+    loop_read_callback from_loop_read_callback;
+    loop_write_callback from_loop_write_callback;
+};
+
 }

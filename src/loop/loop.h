@@ -43,6 +43,13 @@ void start_udp_read(loop_context* context, udp_data* udp);
 void stop_udp_read(loop_context* context, udp_data* udp);
 void write_udp(loop_context* context, udp_data* udp, udp_data::write_request&& request);
 
+// file
+void add_file(loop_context* context, file_data* file);
+void remove_file(loop_context* context, file_data* file);
+void start_file_read(loop_context* context, file_data* file);
+void stop_file_read(loop_context* context, file_data* file);
+void write_file(loop_context* context, file_data* file, file_data::write_request&& request);
+
 // run
 bool run_once(loop_context* context);
 

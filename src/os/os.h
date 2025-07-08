@@ -67,6 +67,23 @@ looper::error write(udp* udp, std::string_view dest_ip, uint16_t dest_port, cons
 
 }
 
+namespace file {
+
+struct file;
+
+looper::error create(file** file_out, std::string_view path, open_mode mode, file_attributes attributes);
+void close(file* file);
+
+descriptor get_descriptor(const file* file);
+
+looper::error seek(file* file, size_t offset, seek_whence whence);
+looper::error tell(const file* file, size_t& offset_out);
+
+looper::error read(file* file, uint8_t* buffer, size_t buffer_size, size_t& read_out);
+looper::error write(file* file, const uint8_t* buffer, size_t size, size_t& written_out);
+
+}
+
 namespace poll {
 
 struct event_data {

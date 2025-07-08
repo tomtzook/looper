@@ -148,6 +148,7 @@ looper::error create(tcp** tcp_out) {
 }
 
 void close(tcp* tcp) {
+    tcp->closed = true;
     ::close(tcp->fd);
 
     free(tcp);
@@ -376,6 +377,7 @@ looper::error create(udp** udp_out) {
 }
 
 void close(udp* udp) {
+    udp->closed = true;
     ::close(udp->fd);
 
     free(udp);

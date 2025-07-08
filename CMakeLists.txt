@@ -30,6 +30,7 @@ set(SOURCES
         include/looper_except.h
         include/looper_tcp.h
         include/looper_udp.h
+        include/looper_file.h
 
         src/util/util.h
         src/util/handles.h
@@ -44,11 +45,13 @@ set(SOURCES
         src/looper.cpp
         src/looper_tcp.cpp
         src/looper_udp.cpp
+        src/looper_file.cpp
         src/trace.cpp
         src/loop/loop.cpp
         src/loop/loop_base.cpp
         src/loop/loop_tcp.cpp
         src/loop/loop_udp.cpp
+        src/loop/loop_file.cpp
 )
 
 if (UNIX)
@@ -57,6 +60,7 @@ if (UNIX)
             src/os/linux/linux_event.cpp
             src/os/linux/linux_socket.cpp
             src/os/linux/epoll_poller.cpp
+            src/os/linux/linux_file.cpp
     )
 endif ()
 

@@ -5,14 +5,14 @@ namespace looper {
 
 #define log_module looper_log_module
 
-static void _udp_read_callback(impl::udp_data* udp, const inet_address& sender, std::span<const uint8_t> buffer, looper::error error) {
+static void _file_read_callback(impl::udp_data* udp, const inet_address& sender, std::span<const uint8_t> buffer, looper::error error) {
     auto loop = get_loop_handle(udp->handle);
 
     looper_trace_debug(log_module, "udp read new data: loop=%lu, handle=%lu, error=%lu", loop, udp->handle, error);
     invoke_func_nolock("udp_read_callback", udp->user_read_callback, loop, udp->handle, sender, buffer, error);
 }
 
-static void _udp_write_callback(impl::udp_data* udp, impl::udp_data::write_request& request) {
+static void _file_write_callback(impl::udp_data* udp, impl::udp_data::write_request& request) {
     auto loop = get_loop_handle(udp->handle);
 
     looper_trace_debug(log_module, "udp writing finished: loop=%lu, handle=%lu, error=%lu", loop, udp->handle, request.error);
@@ -26,8 +26,8 @@ udp create_udp(loop loop) {
 
     auto [handle, udp_data] = data.m_udps.allocate_new();
     udp_data->socket_obj = os::make_udp();
-    udp_data->from_loop_read_callback = _udp_read_callback;
-    udp_data->from_loop_write_callback = _udp_write_callback;
+    udp_data->from_loop_read_callback = _file_read_callback;
+    udp_data->from_loop_write_callback = _file_write_callback;
     udp_data->state = impl::udp_data::state::open;
 
     looper_trace_info(log_module, "creating new udp: loop=%lu, handle=%lu", data.m_handle, handle);
@@ -62,7 +62,7 @@ void bind_udp(udp udp, uint16_t port) {
     auto& udp_data = data.m_udps[udp];
     if (udp_data.socket_obj) {
         looper_trace_info(log_module, "binding udp: loop=%lu, handle=%lu, port=%d", data.m_handle, udp, port);
-        OS_CHECK_THROW(os::tcp::bind(udp_data.socket_obj.get(), port));
+        OS_CHECK_THROW(os::udp::bind(udp_data.socket_obj.get(), port));
     }
 }
 
