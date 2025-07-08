@@ -170,4 +170,54 @@ struct tcp_server_data {
     loop_callback callback;
 };
 
+struct udp_data {
+    struct write_request {
+        inet_address destination;
+        std::unique_ptr<uint8_t[]> buffer;
+        size_t size;
+        udp_callback write_callback;
+
+        looper::error error;
+    };
+
+    using loop_read_callback = std::function<void(udp_data*, const inet_address& sender, std::span<const uint8_t>, looper::error)>;
+    using loop_write_callback = std::function<void(udp_data*, write_request&)>;
+
+    enum class state {
+        init,
+        errored,
+        open
+    };
+
+    explicit udp_data(udp handle)
+        : handle(handle)
+        , socket_obj(nullptr, nullptr)
+        , write_requests()
+        , completed_write_requests()
+        , resource(empty_handle)
+        , reading(false)
+        , write_pending(false)
+        , user_read_callback(nullptr)
+        , from_loop_read_callback(nullptr)
+        , from_loop_write_callback(nullptr)
+        , state(state::init)
+    {}
+
+    udp handle;
+
+    os::udp_ptr socket_obj;
+    udp_read_callback user_read_callback;
+    std::deque<write_request> write_requests;
+    std::deque<write_request> completed_write_requests;
+
+    // managed in loop
+    looper::impl::resource resource;
+    bool reading;
+    bool write_pending;
+    state state;
+
+    loop_read_callback from_loop_read_callback;
+    loop_write_callback from_loop_write_callback;
+};
+
 }

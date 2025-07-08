@@ -30,6 +30,7 @@ struct loop_data {
         , m_futures(handles::handle{handle}.index(), handles::type_future)
         , m_tcps(handles::handle{handle}.index(), handles::type_tcp)
         , m_tcp_servers(handles::handle{handle}.index(), handles::type_tcp_server)
+        , m_udps(handles::handle{handle}.index(), handles::type_udp)
     {}
     ~loop_data() {
         if (m_thread && m_thread->joinable()) {
@@ -62,6 +63,7 @@ struct loop_data {
     handles::handle_table<impl::future_data, handle_counts_per_type> m_futures;
     handles::handle_table<impl::tcp_data, handle_counts_per_type> m_tcps;
     handles::handle_table<impl::tcp_server_data, handle_counts_per_type> m_tcp_servers;
+    handles::handle_table<impl::udp_data, handle_counts_per_type> m_udps;
 };
 
 struct looper_data {

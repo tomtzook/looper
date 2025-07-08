@@ -21,6 +21,12 @@ using event = handle;
 using timer = handle;
 using tcp = handle;
 using tcp_server = handle;
+using udp = handle;
+
+struct inet_address {
+    std::string_view ip;
+    uint16_t port;
+};
 
 using loop_callback = std::function<void(loop)>;
 using future_callback = std::function<void(loop, future)>;
@@ -29,6 +35,8 @@ using timer_callback = std::function<void(loop, timer)>;
 using tcp_callback = std::function<void(loop, tcp, error)>;
 using tcp_read_callback = std::function<void(loop, tcp, std::span<const uint8_t> data, error)>;
 using tcp_server_callback = std::function<void(loop, tcp_server)>;
+using udp_callback = std::function<void(loop, udp, error)>;
+using udp_read_callback = std::function<void(loop, udp, inet_address, std::span<const uint8_t> data, error)>;
 
 enum : error {
     error_success = 0,

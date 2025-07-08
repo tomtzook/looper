@@ -116,7 +116,7 @@ static void tcp_resource_handle_connected_write(std::unique_lock<std::mutex>& lo
     report_write_requests_finished(lock, tcp);
 }
 
-static void tcp_resource_handler(loop_context* context, void* ptr, event_types events) {
+static void udp_resource_handler(loop_context* context, void* ptr, event_types events) {
     std::unique_lock lock(context->mutex);
 
     auto* data = reinterpret_cast<tcp_data*>(ptr);
@@ -169,7 +169,7 @@ void add_tcp(loop_context* context, tcp_data* tcp) {
     auto resource = add_resource(context,
                                  os::tcp::get_descriptor(tcp->socket_obj.get()),
                                  0,
-                                 tcp_resource_handler, tcp);
+                                 udp_resource_handler, tcp);
     tcp->resource = resource;
 
     looper_trace_info(log_module, "adding tcp: ptr=0x%x, resource_handle=%lu", tcp, resource);

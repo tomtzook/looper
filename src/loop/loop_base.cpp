@@ -84,7 +84,7 @@ std::chrono::milliseconds time_now() {
 
 void signal_run(loop_context* context) {
     looper_trace_debug(log_module, "signalling loop run: context=0x%x", context);
-    os::event::clear(context->run_loop_event.get());
+    os::event::set(context->run_loop_event.get());
 }
 
 resource add_resource(loop_context* context, os::descriptor descriptor,

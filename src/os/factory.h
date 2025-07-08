@@ -4,7 +4,6 @@
 #include "os/os.h"
 
 
-
 #define OS_CHECK_THROW(...) \
     do {                    \
         auto _status = __VA_ARGS__; \
@@ -17,6 +16,7 @@ namespace looper::os {
 
 using event_ptr = std::unique_ptr<event::event, decltype(&event::close)>;
 using tcp_ptr = std::unique_ptr<tcp::tcp, decltype(&tcp::close)>;
+using udp_ptr = std::unique_ptr<udp::udp, decltype(&udp::close)>;
 using poller_ptr = std::unique_ptr<poll::poller, decltype(&poll::close)>;
 
 static inline event_ptr make_event() {
@@ -41,6 +41,16 @@ static inline tcp_ptr make_tcp() {
     }
 
     return tcp_ptr(tcp, &tcp::close);
+}
+
+static inline udp_ptr make_udp() {
+    udp::udp* udp;
+    auto status = udp::create(&udp);
+    if (status != error_success) {
+        throw os_exception(status);
+    }
+
+    return udp_ptr(udp, &udp::close);
 }
 
 static inline poller_ptr make_poller() {

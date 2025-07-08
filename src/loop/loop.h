@@ -36,6 +36,13 @@ void write_tcp(loop_context* context, tcp_data* tcp, tcp_data::write_request&& r
 void add_tcp_server(loop_context* context, tcp_server_data* tcp);
 void remove_tcp_server(loop_context* context, tcp_server_data* tcp);
 
+// udp
+void add_udp(loop_context* context, udp_data* udp);
+void remove_udp(loop_context* context, udp_data* udp);
+void start_udp_read(loop_context* context, udp_data* udp);
+void stop_udp_read(loop_context* context, udp_data* udp);
+void write_udp(loop_context* context, udp_data* udp, udp_data::write_request&& request);
+
 // run
 bool run_once(loop_context* context);
 

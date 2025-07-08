@@ -48,6 +48,25 @@ looper::error accept(tcp* this_tcp, tcp** tcp_out);
 
 }
 
+namespace udp {
+
+struct udp;
+
+looper::error create(udp** udp_out);
+void close(udp* udp);
+
+descriptor get_descriptor(udp* udp);
+
+looper::error get_internal_error(udp* udp, looper::error& error_out);
+
+looper::error bind(udp* udp, uint16_t port);
+looper::error bind(udp* udp, std::string_view ip, uint16_t port);
+
+looper::error read(udp* udp, uint8_t* buffer, size_t buffer_size, size_t& read_out, char* sender_ip_buff, size_t sender_ip_buff_size, uint16_t& sender_port_out);
+looper::error write(udp* udp, std::string_view dest_ip, uint16_t dest_port, const uint8_t* buffer, size_t size, size_t& written_out);
+
+}
+
 namespace poll {
 
 struct event_data {
