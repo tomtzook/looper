@@ -24,4 +24,7 @@ static inline looper::error get_call_error() {
     return os_error_to_looper(code);
 }
 
+looper::error io_read(os::descriptor descriptor, uint8_t* buffer, size_t buffer_size, size_t& read_out);
+looper::error io_write(os::descriptor descriptor, const uint8_t* buffer, size_t size, size_t& written_out);
+
 }

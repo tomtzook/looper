@@ -242,28 +242,13 @@ looper::error read(tcp* tcp, uint8_t* buffer, size_t buffer_size, size_t& read_o
         return error_operation_not_supported;
     }
 
-    if (buffer_size == 0) {
-        read_out = 0;
-        return error_success;
+    size_t read_count;
+    const auto status = io_read(tcp->fd, buffer, buffer_size, read_count);
+    if (status != error_success) {
+        return status;
     }
 
-    const auto result = ::read(tcp->fd, buffer, buffer_size);
-    if (result == 0) {
-        return error_eof;
-    }
-    if (result < 0) {
-        const auto error_code = get_call_error();
-        if (error_code == error_again) {
-            // while in non-blocking mode, socket operations may return eagain if
-            // the operation will end up blocking, as such just return.
-            read_out = 0;
-            return error_success;
-        }
-
-        return get_call_error();
-    }
-
-    read_out = result;
+    read_out = read_count;
     return error_success;
 }
 
@@ -275,12 +260,13 @@ looper::error write(tcp* tcp, const uint8_t* buffer, size_t size, size_t& writte
         return error_operation_not_supported;
     }
 
-    const auto result = ::write(tcp->fd, buffer, size);
-    if (result < 0) {
-        return get_call_error();
+    size_t written;
+    const auto status = io_write(tcp->fd, buffer, size, written);
+    if (status != error_success) {
+        return status;
     }
 
-    written_out = result;
+    written_out = written;
     return error_success;
 }
 

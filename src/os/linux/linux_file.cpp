@@ -133,29 +133,14 @@ looper::error read(file* file, uint8_t* buffer, const size_t buffer_size, size_t
         return error_fd_closed;
     }
 
-    if (buffer_size == 0) {
-        read_out = 0;
-        return error_success;
+    size_t read_count;
+    const auto status = io_read(file->fd, buffer, buffer_size, read_count);
+    if (status != error_success) {
+        return status;
     }
 
-    const auto result = ::read(file->fd, buffer, buffer_size);
-    if (result == 0) {
-        return error_eof;
-    }
-    if (result < 0) {
-        const auto error_code = get_call_error();
-        if (error_code == error_again) {
-            // while in non-blocking mode, socket operations may return eagain if
-            // the operation will end up blocking, as such just return.
-            read_out = 0;
-            return error_success;
-        }
-
-        return get_call_error();
-    }
-
-    file->offset += result;
-    read_out = result;
+    file->offset += read_count;
+    read_out = read_count;
     return error_success;
 }
 
@@ -164,13 +149,14 @@ looper::error write(file* file, const uint8_t* buffer, const size_t size, size_t
         return error_fd_closed;
     }
 
-    const auto result = ::write(file->fd, buffer, size);
-    if (result < 0) {
-        return get_call_error();
+    size_t written;
+    const auto status = io_write(file->fd, buffer, size, written);
+    if (status != error_success) {
+        return status;
     }
 
-    file->offset += result;
-    written_out = result;
+    file->offset += written;
+    written_out = written;
     return error_success;
 }
 

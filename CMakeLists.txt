@@ -52,6 +52,7 @@ set(SOURCES
         src/loop/loop_tcp.cpp
         src/loop/loop_udp.cpp
         src/loop/loop_file.cpp
+        src/os/linux/linux_io.cpp
 )
 
 if (UNIX)
