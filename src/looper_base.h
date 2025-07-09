@@ -14,11 +14,9 @@
 #include "loop/loop.h"
 #include "loop/loop_timer.h"
 #include "loop/loop_future.h"
-#include "loop/loop_resource.h"
 #include "loop/loop_event.h"
 #include "loop/loop_tcp.h"
 #include "loop/loop_udp.h"
-#include "loop/loop_file.h"
 
 namespace looper {
 
@@ -39,7 +37,6 @@ struct loop_data {
         , m_tcps(handles::handle{handle}.index(), handles::type_tcp)
         , m_tcp_servers(handles::handle{handle}.index(), handles::type_tcp_server)
         , m_udps(handles::handle{handle}.index(), handles::type_udp)
-        , m_files(handles::handle{handle}.index(), handles::type_file)
     {}
     ~loop_data() {
         if (m_thread && m_thread->joinable()) {
@@ -73,7 +70,6 @@ struct loop_data {
     handles::handle_table<impl::tcp, handle_counts_per_type> m_tcps;
     handles::handle_table<impl::tcp_server, handle_counts_per_type> m_tcp_servers;
     handles::handle_table<impl::udp, handle_counts_per_type> m_udps;
-    handles::handle_table<impl::file, handle_counts_per_type> m_files;
 };
 
 struct looper_data {

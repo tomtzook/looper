@@ -17,7 +17,6 @@ namespace looper::os {
 using event_ptr = std::unique_ptr<event::event, decltype(&event::close)>;
 using tcp_ptr = std::unique_ptr<tcp::tcp, decltype(&tcp::close)>;
 using udp_ptr = std::unique_ptr<udp::udp, decltype(&udp::close)>;
-using file_ptr = std::unique_ptr<file::file, decltype(&file::close)>;
 using poller_ptr = std::unique_ptr<poll::poller, decltype(&poll::close)>;
 
 static inline event_ptr make_event() {
@@ -52,16 +51,6 @@ static inline udp_ptr make_udp() {
     }
 
     return udp_ptr(udp, &udp::close);
-}
-
-static inline file_ptr make_file(const std::string_view path, const open_mode mode, const file_attributes attributes) {
-    file::file* file;
-    const auto status = file::create(&file, path, mode, attributes);
-    if (status != error_success) {
-        throw os_exception(status);
-    }
-
-    return file_ptr(file, &file::close);
 }
 
 static inline poller_ptr make_poller() {

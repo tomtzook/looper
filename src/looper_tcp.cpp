@@ -39,6 +39,17 @@ void bind_tcp(const tcp tcp, const uint16_t port) {
     tcp_impl.bind(port);
 }
 
+void bind_tcp(const tcp tcp, const std::string_view address, const uint16_t port) {
+    std::unique_lock lock(get_global_loop_data().m_mutex);
+
+    auto& data = get_loop_from_handle(tcp);
+
+    looper_trace_info(log_module, "binding tcp: loop=%lu, handle=%lu, address=%s:%d", data.m_handle, tcp, address.data(), port);
+
+    auto& tcp_impl = data.m_tcps[tcp];
+    tcp_impl.bind(address, port);
+}
+
 void connect_tcp(const tcp tcp, const std::string_view address, const uint16_t port, tcp_callback&& callback) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 

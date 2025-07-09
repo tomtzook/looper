@@ -10,6 +10,7 @@ tcp::tcp(const looper::tcp handle, loop_context *context)
     : stream(handle, context)
     , m_state(state::open)
     , m_socket_obj(os::make_tcp()) {
+    std::unique_lock lock(m_context->mutex);
     attach_to_loop(os::tcp::get_descriptor(m_socket_obj.get()), 0);
 }
 
@@ -17,7 +18,6 @@ tcp::tcp(const looper::tcp handle, loop_context *context, os::tcp_ptr&& socket)
     : stream(handle, context)
     , m_state(state::connected)
     , m_socket_obj(std::move(socket)) {
-    std::unique_lock lock(m_context->mutex);
     attach_to_loop(os::tcp::get_descriptor(m_socket_obj.get()), 0);
     set_read_enabled(true);
     set_write_enabled(true);

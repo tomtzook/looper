@@ -9,11 +9,11 @@ set(CMAKE_CXX_STANDARD 20)
 include(GNUInstallDirs)
 
 if (NOT DEFINED TRACE_LEVEL)
-    set(TRACE_LEVEL 0)
+    set(TRACE_LEVEL 2)
 endif ()
 if (NOT DEFINED TRACE_SINK)
     if (UNIX)
-        set(TRACE_SINK 1)
+        set(TRACE_SINK 0)
     else ()
         set(TRACE_SINK 0)
     endif ()
@@ -30,8 +30,6 @@ set(SOURCES
         include/looper_except.h
         include/looper_tcp.h
         include/looper_udp.h
-        include/looper_file.h
-        include/looper_stream.h
 
         src/util/util.h
         src/util/handles.h
@@ -46,17 +44,14 @@ set(SOURCES
         src/looper.cpp
         src/looper_tcp.cpp
         src/looper_udp.cpp
-        src/looper_file.cpp
         src/trace.cpp
         src/loop/loop.cpp
         src/loop/loop_base.cpp
         src/loop/loop_tcp.cpp
         src/loop/loop_udp.cpp
-        src/loop/loop_file.cpp
         src/loop/loop_stream.cpp
         src/loop/loop_resource.cpp
         src/loop/loop_udp.h
-        src/loop/loop_file.h
         src/loop/loop_event.cpp
         src/loop/loop_timer.cpp
         src/loop/loop_future.h

@@ -22,10 +22,6 @@ using timer = handle;
 using tcp = handle;
 using tcp_server = handle;
 using udp = handle;
-using file = handle;
-
-template<typename T>
-concept stream_handle = std::is_same_v<T, tcp> || std::is_same_v<T, file>;
 
 struct inet_address {
     std::string_view ip;
@@ -54,43 +50,5 @@ enum : error {
     error_allocation,
     error_invalid_filemode
 };
-
-enum class open_mode {
-    read = 1,
-    write = 2,
-    append = 4,
-    create = 8,
-};
-
-enum class file_attributes {
-    none = 0,
-    directory = 1
-};
-
-enum class seek_whence {
-    begin = 0,
-    current = 1,
-    end = 2
-};
-
-static inline open_mode operator|(open_mode lhs, open_mode rhs) {
-    return static_cast<open_mode>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
-}
-static inline open_mode operator&(open_mode lhs, open_mode rhs) {
-    return static_cast<open_mode>(static_cast<uint32_t>(lhs) & static_cast<uint32_t>(rhs));
-}
-static inline bool operator!=(open_mode lhs, uint32_t rhs) {
-    return static_cast<uint32_t>(lhs) != rhs;
-}
-
-static inline file_attributes operator|(file_attributes lhs, file_attributes rhs) {
-    return static_cast<file_attributes>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
-}
-static inline file_attributes operator&(file_attributes lhs, file_attributes rhs) {
-    return static_cast<file_attributes>(static_cast<uint32_t>(lhs) & static_cast<uint32_t>(rhs));
-}
-static inline bool operator!=(file_attributes lhs, uint32_t rhs) {
-    return static_cast<uint32_t>(lhs) != rhs;
-}
 
 }

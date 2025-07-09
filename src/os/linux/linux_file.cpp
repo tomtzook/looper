@@ -6,6 +6,26 @@
 
 namespace looper::os::file {
 
+static inline open_mode operator|(open_mode lhs, open_mode rhs) {
+    return static_cast<open_mode>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
+}
+static inline open_mode operator&(open_mode lhs, open_mode rhs) {
+    return static_cast<open_mode>(static_cast<uint32_t>(lhs) & static_cast<uint32_t>(rhs));
+}
+static inline bool operator!=(open_mode lhs, uint32_t rhs) {
+    return static_cast<uint32_t>(lhs) != rhs;
+}
+
+static inline file_attributes operator|(file_attributes lhs, file_attributes rhs) {
+    return static_cast<file_attributes>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
+}
+static inline file_attributes operator&(file_attributes lhs, file_attributes rhs) {
+    return static_cast<file_attributes>(static_cast<uint32_t>(lhs) & static_cast<uint32_t>(rhs));
+}
+static inline bool operator!=(file_attributes lhs, uint32_t rhs) {
+    return static_cast<uint32_t>(lhs) != rhs;
+}
+
 struct file {
     os::descriptor fd;
     bool closed;
@@ -45,7 +65,7 @@ static looper::error get_open_flags(const open_mode mode, const file_attributes 
         flags |= O_APPEND;
     }
     if ((mode & open_mode::create) != 0) {
-        flags |= O_CREAT;
+        flags |= (O_CREAT | O_TRUNC);
     }
     if ((attributes & file_attributes::directory) != 0) {
         flags |= O_DIRECTORY;
@@ -64,7 +84,8 @@ static looper::error open_file(const std::string_view path, const open_mode mode
         return status;
     }
 
-    const int fd = ::open(path_c.c_str(), open_flags);
+    static constexpr auto default_perms = S_IRWXU;
+    const int fd = ::open(path_c.c_str(), open_flags, default_perms);
     if (fd < 0) {
         return get_call_error();
     }

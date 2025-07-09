@@ -11,6 +11,7 @@ tcp create_tcp(loop loop);
 void destroy_tcp(tcp tcp);
 
 void bind_tcp(tcp tcp, uint16_t port);
+void bind_tcp(tcp tcp, std::string_view address, uint16_t port);
 void connect_tcp(tcp tcp, std::string_view address, uint16_t port, tcp_callback&& callback);
 
 void start_tcp_read(tcp tcp, read_callback&& callback);

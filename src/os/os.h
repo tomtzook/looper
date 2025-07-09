@@ -69,6 +69,24 @@ looper::error write(udp* udp, std::string_view dest_ip, uint16_t dest_port, cons
 
 namespace file {
 
+enum class open_mode {
+    read = 1,
+    write = 2,
+    append = 4,
+    create = 8,
+};
+
+enum class file_attributes {
+    none = 0,
+    directory = 1
+};
+
+enum class seek_whence {
+    begin = 0,
+    current = 1,
+    end = 2
+};
+
 struct file;
 
 looper::error create(file** file_out, std::string_view path, open_mode mode, file_attributes attributes);
