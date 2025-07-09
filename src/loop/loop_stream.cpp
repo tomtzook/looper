@@ -32,7 +32,7 @@ void stream::start_read(read_callback&& callback) {
         throw std::runtime_error("stream cannot read because it is errored");
     }
 
-    looper_trace_info(log_module, "stream starting read: ptr=0x%x", this);
+    looper_trace_info(log_module, "stream starting read: handle=%lu", m_handle);
 
     m_user_read_callback = callback;
     request_events(event_in, events_update_type::append);
@@ -46,7 +46,7 @@ void stream::stop_read() {
         return;
     }
 
-    looper_trace_info(log_module, "stream stopping read: ptr=0x%x", this);
+    looper_trace_info(log_module, "stream stopping read: handle=%lu", m_handle);
 
     m_reading = false;
     request_events(event_in, events_update_type::remove);
@@ -61,7 +61,7 @@ void stream::write(write_request&& request) {
         throw std::runtime_error("stream cannot write at the current state");
     }
 
-    looper_trace_info(log_module, "stream writing: ptr=0x%x, buffer_size=%lu", this, request.size);
+    looper_trace_info(log_module, "stream writing: handle=%lu, buffer_size=%lu", m_handle, request.size);
 
     m_write_requests.push_back(std::move(request));
 
@@ -115,10 +115,10 @@ void stream::handle_read(std::unique_lock<std::mutex>& lock) {
     const auto error = read_from_obj(m_context->read_buffer, sizeof(m_context->read_buffer), read);
     if (error == error_success) {
         data = std::span<const uint8_t>{m_context->read_buffer, read};
-        looper_trace_debug(log_module, "stream read new data: ptr=0x%x, data_size=%lu", this, data.size());
+        looper_trace_debug(log_module, "stream read new data: handle=%lu, data_size=%lu", m_handle, data.size());
     } else {
         m_is_errored = true;
-        looper_trace_error(log_module, "stream read error: ptr=0x%x, code=%lu", this, error);
+        looper_trace_error(log_module, "stream read error: handle=%lu, code=%lu", m_handle, error);
     }
 
     invoke_func<>(lock, "stream_loop_callback", m_user_read_callback, m_context->handle, m_handle, data, error);
@@ -174,7 +174,7 @@ bool stream::do_write() {
                 return true;
             }
 
-            looper_trace_debug(log_module, "stream write request finished: ptr=0x%x", this);
+            looper_trace_debug(log_module, "stream write request finished: handle=%lu", m_handle);
             request.error = error_success;
 
             m_completed_write_requests.push_back(std::move(request));
@@ -183,7 +183,7 @@ bool stream::do_write() {
             // didn't finish write, but need to try again later
             return true;
         } else {
-            looper_trace_error(log_module, "stream write request failed: ptr=0x%x, code=%lu", this, error);
+            looper_trace_error(log_module, "stream write request failed: handle=%lu, code=%lu", m_handle, error);
             request.error = error;
 
             m_completed_write_requests.push_back(std::move(request));

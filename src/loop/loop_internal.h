@@ -42,6 +42,13 @@ enum class events_update_type {
 };
 
 struct timer_data {
+    timer_data()
+        : timeout(0)
+        , next_timestamp(0)
+        , hit(true)
+        , callback(nullptr)
+    {}
+
     std::chrono::milliseconds timeout;
     std::chrono::milliseconds next_timestamp;
     bool hit;
@@ -50,6 +57,12 @@ struct timer_data {
 };
 
 struct future_data {
+    future_data()
+        : finished(true)
+        , execute_time(0)
+        , callback(nullptr)
+    {}
+
     bool finished;
     std::chrono::milliseconds execute_time;
     loop_future_callback callback;

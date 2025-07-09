@@ -31,7 +31,7 @@ void future::execute(const std::chrono::milliseconds delay) {
         handle_events();
     };
 
-    looper_trace_info(log_module, "queueing future: ptr=0x%x, run_at=%lu", this, m_context_data.execute_time.count());
+    looper_trace_info(log_module, "queueing future: handle=%lu, run_at=%lu", m_handle, m_context_data.execute_time.count());
 
     m_context->futures.push_back(&m_context_data);
     if (delay.count() < 1) {
@@ -55,9 +55,11 @@ bool future::wait_for(std::unique_lock<std::mutex>& lock, const std::chrono::mil
 
 void future::handle_events() {
     std::unique_lock lock(m_context->mutex);
-    invoke_func(lock, "future_callback", m_callback, m_context->handle, m_handle);
+
     m_context->futures.remove(&m_context_data);
     m_exec_finished.notify_all();
+
+    invoke_func(lock, "future_callback", m_callback, m_context->handle, m_handle);
 }
 
 }

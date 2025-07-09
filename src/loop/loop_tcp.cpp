@@ -48,7 +48,7 @@ void tcp::connect(const std::string_view address, const uint16_t port, tcp_callb
         throw std::runtime_error("tcp state invalid for connect");
     }
 
-    looper_trace_info(log_module, "connecting tcp: ptr=0x%x", this);
+    looper_trace_info(log_module, "connecting tcp: handle=%lu", m_handle);
 
     m_connect_callback = callback;
     m_state = state::connecting;
@@ -59,7 +59,7 @@ void tcp::connect(const std::string_view address, const uint16_t port, tcp_callb
     } else if (error == error_in_progress) {
         // wait for connection finish
         request_events(event_out, events_update_type::append);
-        looper_trace_info(log_module, "tcp connection not finished: ptr=0x%x", this);
+        looper_trace_info(log_module, "tcp connection not finished: handle=%lu", m_handle);
     } else {
         on_connect_done(lock, error);
     }
@@ -116,7 +116,7 @@ void tcp::on_connect_done(std::unique_lock<std::mutex>& lock, const error error)
     if (error == error_success) {
         // connection finished
         m_state = state::connected;
-        looper_trace_info(log_module, "connected tcp: ptr=0x%x", this);
+        looper_trace_info(log_module, "connected tcp: handle=%lu", m_handle);
 
         set_read_enabled(true);
         set_write_enabled(true);
@@ -124,7 +124,7 @@ void tcp::on_connect_done(std::unique_lock<std::mutex>& lock, const error error)
         invoke_func<>(lock, "tcp_loop_callback", m_connect_callback, m_context->handle, m_handle, error);
     } else {
         mark_errored();
-        looper_trace_error(log_module, "tcp connection failed: ptr=0x%x, code=%s", this, error);
+        looper_trace_error(log_module, "tcp connection failed: handle=%lu, code=%s", m_handle, error);
         invoke_func<>(lock, "tcp_loop_callback", m_connect_callback, m_context->handle, m_handle, error);
     }
 }

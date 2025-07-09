@@ -31,7 +31,7 @@ void timer::start() {
 
     m_context->timers.push_back(&m_context_data);
 
-    looper_trace_info(log_module, "starting timer: ptr=0x%x, next_time=%lu", this, m_context_data.next_timestamp.count());
+    looper_trace_info(log_module, "starting timer: handle=%lu, next_time=%lu", m_handle, m_context_data.next_timestamp.count());
 
     if (m_context->timeout > m_timeout) {
         m_context->timeout = m_timeout;
@@ -43,7 +43,7 @@ void timer::start() {
 void timer::stop() {
     std::unique_lock lock(m_context->mutex);
 
-    looper_trace_info(log_module, "removing timer: ptr=0x%x", this);
+    looper_trace_info(log_module, "removing timer: handle=%lu", m_handle);
 
     m_context->timers.remove(&m_context_data);
     reset_smallest_timeout(m_context);
@@ -58,7 +58,7 @@ void timer::reset() {
     m_context_data.hit = false;
     m_context_data.next_timestamp = time_now() + m_timeout;
 
-    looper_trace_info(log_module, "resetting timer: ptr=0x%x, next_time=%lu", this, m_context_data.next_timestamp.count());
+    looper_trace_info(log_module, "resetting timer: handle=%lu, next_time=%lu", m_handle, m_context_data.next_timestamp.count());
 }
 
 void timer::handle_events() {

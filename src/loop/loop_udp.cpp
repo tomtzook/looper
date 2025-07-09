@@ -46,7 +46,7 @@ void udp::start_read(udp_read_callback&& callback) {
         throw std::runtime_error("udp cannot read because it is errored");
     }
 
-    looper_trace_info(log_module, "udp starting read: ptr=0x%x", this);
+    looper_trace_info(log_module, "udp starting read: handle=%lu", m_handle);
 
     m_read_callback = callback;
     request_events(event_in, events_update_type::append);
@@ -60,7 +60,7 @@ void udp::stop_read() {
         return;
     }
 
-    looper_trace_info(log_module, "udp stopping read: ptr=0x%x", this);
+    looper_trace_info(log_module, "udp stopping read: handle=%lu", m_handle);
 
     m_reading = false;
     request_events(event_in, events_update_type::remove);
@@ -71,7 +71,7 @@ void udp::write(write_request&& request) {
 
     verify_not_errored();
 
-    looper_trace_info(log_module, "udp writing: ptr=0x%x, buffer_size=%lu", this, request.size);
+    looper_trace_info(log_module, "udp writing: handle=%lu, buffer_size=%lu", m_handle, request.size);
 
     m_write_requests.push_back(std::move(request));
 
@@ -122,10 +122,10 @@ void udp::handle_read(std::unique_lock<std::mutex>& lock) {
         port);
     if (error == error_success) {
         data = std::span<const uint8_t>{m_context->read_buffer, read};
-        looper_trace_debug(log_module, "udp read new data: ptr=0x%x, data_size=%lu", this, data.size());
+        looper_trace_debug(log_module, "udp read new data: handle=%lu, data_size=%lu", m_handle, data.size());
     } else {
         m_is_errored = true;
-        looper_trace_error(log_module, "udp read error: ptr=0x%x, code=%lu", this, error);
+        looper_trace_error(log_module, "udp read error: handle=%lu, code=%lu", m_handle, error);
     }
 
     invoke_func<>(lock, "udp_loop_callback", m_read_callback,
@@ -188,7 +188,7 @@ bool udp::do_write() {
                 return true;
             }
 
-            looper_trace_debug(log_module, "udp write request finished: ptr=0x%x", this);
+            looper_trace_debug(log_module, "udp write request finished: handle=%lu", m_handle);
             request.error = error_success;
 
             m_completed_write_requests.push_back(std::move(request));
@@ -197,7 +197,7 @@ bool udp::do_write() {
             // didn't finish write, but need to try again later
             return true;
         } else {
-            looper_trace_error(log_module, "udp write request failed: ptr=0x%x, code=%lu", this, error);
+            looper_trace_error(log_module, "udp write request failed: handle=%lu, code=%lu", m_handle, error);
             request.error = error;
 
             m_completed_write_requests.push_back(std::move(request));
