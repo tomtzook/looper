@@ -10,7 +10,15 @@
 #include "util/handles.h"
 #include "util/util.h"
 #include "os/factory.h"
+
 #include "loop/loop.h"
+#include "loop/loop_timer.h"
+#include "loop/loop_future.h"
+#include "loop/loop_resource.h"
+#include "loop/loop_event.h"
+#include "loop/loop_tcp.h"
+#include "loop/loop_udp.h"
+#include "loop/loop_file.h"
 
 namespace looper {
 
@@ -22,7 +30,7 @@ static constexpr size_t loops_count = 8;
 struct loop_data {
     explicit loop_data(loop handle)
         : m_handle(handle)
-        , m_context(impl::create_loop())
+        , m_context(impl::create_loop(handle))
         , m_closing(false)
         , m_thread(nullptr)
         , m_events(handles::handle{handle}.index(), handles::type_event)
@@ -59,13 +67,13 @@ struct loop_data {
     bool m_closing;
 
     std::unique_ptr<std::thread> m_thread;
-    handles::handle_table<impl::event_data, handle_counts_per_type> m_events;
-    handles::handle_table<impl::timer_data, handle_counts_per_type> m_timers;
-    handles::handle_table<impl::future_data, handle_counts_per_type> m_futures;
-    handles::handle_table<impl::tcp_data, handle_counts_per_type> m_tcps;
-    handles::handle_table<impl::tcp_server_data, handle_counts_per_type> m_tcp_servers;
-    handles::handle_table<impl::udp_data, handle_counts_per_type> m_udps;
-    handles::handle_table<impl::file_data, handle_counts_per_type> m_files;
+    handles::handle_table<impl::event, handle_counts_per_type> m_events;
+    handles::handle_table<impl::timer, handle_counts_per_type> m_timers;
+    handles::handle_table<impl::future, handle_counts_per_type> m_futures;
+    handles::handle_table<impl::tcp, handle_counts_per_type> m_tcps;
+    handles::handle_table<impl::tcp_server, handle_counts_per_type> m_tcp_servers;
+    handles::handle_table<impl::udp, handle_counts_per_type> m_udps;
+    handles::handle_table<impl::file, handle_counts_per_type> m_files;
 };
 
 struct looper_data {

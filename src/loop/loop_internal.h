@@ -23,7 +23,10 @@ namespace looper::impl {
 
 #define loop_log_module "loop"
 
+using resource = handle;
 using resource_callback = std::function<void(loop_context*, void*, event_types)>;
+using loop_timer_callback = std::function<void()>;
+using loop_future_callback = std::function<void()>;
 
 static constexpr size_t max_events_for_process = 20;
 static constexpr size_t initial_reserve_size = 20;
@@ -36,6 +39,20 @@ enum class events_update_type {
     override,
     append,
     remove
+};
+
+struct timer_data {
+    std::chrono::milliseconds timeout;
+    std::chrono::milliseconds next_timestamp;
+    bool hit;
+    loop_timer_callback callback;
+
+};
+
+struct future_data {
+    bool finished;
+    std::chrono::milliseconds execute_time;
+    loop_future_callback callback;
 };
 
 struct resource_data {
@@ -68,8 +85,9 @@ struct update {
 };
 
 struct loop_context {
-    loop_context();
+    explicit loop_context(looper::loop handle);
 
+    looper::loop handle;
     std::mutex mutex;
     os::poller_ptr poller;
     std::chrono::milliseconds timeout;
@@ -86,13 +104,12 @@ struct loop_context {
     std::list<timer_data*> timers;
     std::deque<update> updates;
 
-    std::vector<std::pair<timer_data*, timer_data::loop_callback>> timer_call_holder;
-    std::vector<std::pair<future_data*, future_data::loop_callback>> future_call_holder;
     uint8_t read_buffer[read_buffer_size];
 };
 
 std::chrono::milliseconds time_now();
 void signal_run(loop_context* context);
+void reset_smallest_timeout(loop_context* context);
 
 resource add_resource(loop_context* context,
                       os::descriptor descriptor,

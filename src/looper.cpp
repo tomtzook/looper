@@ -9,7 +9,7 @@ looper_data& get_global_loop_data() {
     return g_instance;
 }
 
-static void run_loop_forever(loop loop) {
+static void run_loop_forever(const loop loop) {
     while (true) {
         std::unique_lock lock(get_global_loop_data().m_mutex);
         auto data_opt = try_get_loop(loop);
@@ -17,103 +17,52 @@ static void run_loop_forever(loop loop) {
             break;
         }
 
-        auto* data = data_opt.value();
+        const auto* data = data_opt.value();
         lock.unlock();
 
-        bool finished = impl::run_once(data->m_context);
+        const auto finished = impl::run_once(data->m_context);
         if (finished) {
             break;
         }
     }
 }
 
-static void thread_main(loop loop) {
+static void thread_main(const loop loop) {
     run_loop_forever(loop);
 }
 
-static void future_loop_callback(impl::future_data* future) {
-    auto loop = get_loop_handle(future->handle);
-
-    looper_trace_debug(log_module, "future callback called: loop=%lu, handle=%lu", loop, future->handle);
-    invoke_func_nolock("future_user_callback", future->user_callback, loop, future->handle);
-
-    future->exec_finished.notify_all();
-}
-
-static void event_loop_callback(impl::event_data* event) {
-    auto loop = get_loop_handle(event->handle);
-
-    looper_trace_debug(log_module, "event callback called: loop=%lu, handle=%lu", loop, event->handle);
-    invoke_func_nolock("event_user_callback", event->user_callback, loop, event->handle);
-}
-
-static void timer_loop_callback(impl::timer_data* timer) {
-    auto loop = get_loop_handle(timer->handle);
-
-    looper_trace_debug(log_module, "timer callback called: loop=%lu, handle=%lu", loop, timer->handle);
-    invoke_func_nolock("timer_user_callback", timer->user_callback, loop, timer->handle);
-}
-
-static future create_future_internal(loop loop, future_callback&& callback) {
+static future create_future_internal(const loop loop, future_callback&& callback) {
     auto& data = get_loop(loop);
 
-    auto [handle, future_data] = data.m_futures.allocate_new();
-    future_data->user_callback = std::move(callback);
-    future_data->from_loop_callback = future_loop_callback;
-
+    auto [handle, future_impl] = data.m_futures.allocate_new(data.m_context, std::move(callback));
     looper_trace_info(log_module, "creating future: loop=%lu, handle=%lu", loop, handle);
-
-    impl::add_future(data.m_context, future_data.get());
-
-    data.m_futures.assign(handle, std::move(future_data));
+    data.m_futures.assign(handle, std::move(future_impl));
 
     return handle;
 }
 
-static void destroy_future_internal(future future) {
+static void destroy_future_internal(const future future) {
     auto& data = get_loop_from_handle(future);
 
     looper_trace_info(log_module, "destroying future: loop=%lu, handle=%lu", data.m_handle, future);
 
-    auto future_data = data.m_futures.release(future);
-    impl::remove_future(data.m_context, future_data.get());
+    const auto future_impl = data.m_futures.release(future);
 }
 
-static void execute_future_internal(future future, std::chrono::milliseconds delay) {
+static void execute_future_internal(const future future, const std::chrono::milliseconds delay) {
     auto& data = get_loop_from_handle(future);
-
-    auto& future_data = data.m_futures[future];
-    if (!future_data.finished) {
-        throw std::runtime_error("future already queued for execution");
-    }
 
     looper_trace_info(log_module, "requesting future execution: loop=%lu, handle=%lu, delay=%lu", data.m_handle, future, delay.count());
 
-    future_data.delay = delay;
-    impl::exec_future(data.m_context, &future_data);
+    auto& future_impl = data.m_futures[future];
+    future_impl.execute(delay);
 }
 
-static bool wait_for_future_internal(std::unique_lock<std::mutex>& lock, future future, std::chrono::milliseconds timeout) {
+static bool wait_for_future_internal(std::unique_lock<std::mutex>& lock, const future future, const std::chrono::milliseconds timeout) {
     auto& data = get_loop_from_handle(future);
 
-    auto& future_data = data.m_futures[future];
-    if (future_data.finished) {
-        looper_trace_debug(log_module, "future already finished, not waiting: loop=%lu, handle=%lu", data.m_handle, future);
-        return false;
-    }
-
-    looper_trace_info(log_module, "waiting on future: loop=%lu, handle=%lu, timeout=%lu", data.m_handle, future, timeout.count());
-
-    return !future_data.exec_finished.wait_for(lock, timeout, [future]()->bool {
-        auto& data = get_loop_from_handle(future);
-
-        if (!data.m_futures.has(future)) {
-            return true;
-        }
-
-        auto& future_data = data.m_futures[future];
-        return future_data.finished;
-    });
+    auto& future_impl = data.m_futures[future];
+    return future_impl.wait_for(lock, timeout);
 }
 
 loop create() {
@@ -127,14 +76,14 @@ loop create() {
     return handle;
 }
 
-void destroy(loop loop) {
+void destroy(const loop loop) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
     auto& data = get_loop(loop);
     data.m_closing = true;
 
     looper_trace_info(log_module, "destroying loop: handle=%lu", loop);
 
-    auto thread = std::move(data.m_thread);
+    const auto thread = std::move(data.m_thread);
     lock.unlock();
 
     if (thread && thread->joinable()) {
@@ -150,10 +99,10 @@ void destroy(loop loop) {
     looper_trace_info(log_module, "loop destroyed: handle=%lu", loop);
 }
 
-void run_once(loop loop) {
+void run_once(const loop loop) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
-    auto& data = get_loop(loop);
+    const auto& data = get_loop(loop);
     if (data.m_thread) {
         throw std::runtime_error("loop running in thread");
     }
@@ -164,10 +113,10 @@ void run_once(loop loop) {
     impl::run_once(data.m_context);
 }
 
-void run_forever(loop loop) {
+void run_forever(const loop loop) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
-    auto& data = get_loop(loop);
+    const auto& data = get_loop(loop);
     if (data.m_thread) {
         throw std::runtime_error("loop running in thread");
     }
@@ -193,30 +142,30 @@ void exec_in_thread(loop loop) {
 }
 
 // execute
-future create_future(loop loop, future_callback&& callback) {
+future create_future(const loop loop, future_callback&& callback) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
     return create_future_internal(loop, std::move(callback));
 }
 
-void destroy_future(future future) {
+void destroy_future(const future future) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
     destroy_future_internal(future);
 }
 
-void execute_once(future future, std::chrono::milliseconds delay) {
+void execute_once(const future future, const std::chrono::milliseconds delay) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
     execute_future_internal(future, delay);
 }
 
-bool wait_for(future future, std::chrono::milliseconds timeout) {
+bool wait_for(const future future, const std::chrono::milliseconds timeout) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
     return wait_for_future_internal(lock, future, timeout);
 }
 
-void execute_later(loop loop, loop_callback&& callback) {
+void execute_later(const loop loop, loop_callback&& callback) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
-    auto future = create_future_internal(loop, [callback](looper::loop loop, looper::future future)->void {
+    const auto future = create_future_internal(loop, [callback](const looper::loop loop, const looper::future future)->void {
         std::unique_lock lock(get_global_loop_data().m_mutex);
         destroy_future_internal(future);
 
@@ -225,10 +174,10 @@ void execute_later(loop loop, loop_callback&& callback) {
     execute_future_internal(future, no_delay);
 }
 
-bool execute_later_and_wait(loop loop, loop_callback&& callback, std::chrono::milliseconds timeout) {
+bool execute_later_and_wait(const loop loop, loop_callback&& callback, const std::chrono::milliseconds timeout) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
-    auto future = create_future_internal(loop, [callback](looper::loop loop, looper::future future)->void {
+    const auto future = create_future_internal(loop, [callback](const looper::loop loop, const looper::future future)->void {
         std::unique_lock lock(get_global_loop_data().m_mutex);
         destroy_future_internal(future);
 
@@ -240,124 +189,104 @@ bool execute_later_and_wait(loop loop, loop_callback&& callback, std::chrono::mi
 }
 
 // events
-event create_event(loop loop, event_callback&& callback) {
+event create_event(const loop loop, event_callback&& callback) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop(loop);
 
-    auto [handle, event_data] = data.m_events.allocate_new();
-    event_data->user_callback = std::move(callback);
-    event_data->event_obj = os::make_event();
-    event_data->from_loop_callback = event_loop_callback;
-
-    looper_trace_info(log_module, "creating new event: loop=%lu, handle=%lu", loop, handle);
-
-    impl::add_event(data.m_context, event_data.get());
-
+    auto [handle, event_data] = data.m_events.allocate_new(data.m_context, std::move(callback));
+    looper_trace_info(log_module, "created new event: loop=%lu, handle=%lu", loop, handle);
     data.m_events.assign(handle, std::move(event_data));
 
     return handle;
 }
 
-void destroy_event(event event) {
+void destroy_event(const event event) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(event);
 
     looper_trace_info(log_module, "destroying event: loop=%lu, handle=%lu", data.m_handle, event);
 
-    auto event_data = data.m_events.release(event);
-    impl::remove_event(data.m_context, event_data.get());
+    const auto event_impl = data.m_events.release(event);
 }
 
-void set_event(event event) {
+void set_event(const event event) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(event);
 
     looper_trace_debug(log_module, "setting event: loop=%lu, handle=%lu", data.m_handle, event);
 
-    auto& event_data = data.m_events[event];
-    OS_CHECK_THROW(os::event::set(event_data.event_obj.get()));
+    auto& event_impl = data.m_events[event];
+    event_impl.set();
 }
 
-void clear_event(event event) {
+void clear_event(const event event) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(event);
 
     looper_trace_debug(log_module, "clearing event: loop=%lu, handle=%lu", data.m_handle, event);
 
-    auto& event_data = data.m_events[event];
-    OS_CHECK_THROW(os::event::clear(event_data.event_obj.get()));
+    auto& event_impl = data.m_events[event];
+    event_impl.clear();
 }
 
 // timers
-timer create_timer(loop loop, std::chrono::milliseconds timeout, timer_callback&& callback) {
+timer create_timer(const loop loop, std::chrono::milliseconds timeout, timer_callback&& callback) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop(loop);
 
-    auto [handle, timer_data] = data.m_timers.assign_new();
-    timer_data.user_callback = std::move(callback);
-    timer_data.timeout = timeout;
-    timer_data.from_loop_callback = timer_loop_callback;
-
+    auto [handle, timer_impl] = data.m_timers.assign_new(data.m_context, std::move(callback), timeout);
     looper_trace_info(log_module, "creating new timer: loop=%lu, handle=%lu, timeout=%lu", data.m_handle, handle, timeout.count());
 
     return handle;
 }
 
-void destroy_timer(timer timer) {
+void destroy_timer(const timer timer) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(timer);
 
     looper_trace_info(log_module, "destroying timer: loop=%lu, handle=%lu", data.m_handle, timer);
 
-    auto timer_data = data.m_timers.release(timer);
-    if (timer_data->running) {
-        impl::remove_timer(data.m_context, timer_data.get());
-    }
+    const auto timer_impl = data.m_timers.release(timer);
+    timer_impl->stop();
 }
 
-void start_timer(timer timer) {
+void start_timer(const timer timer) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(timer);
 
-    auto& timer_data = data.m_timers[timer];
-    if (!timer_data.running) {
-        looper_trace_debug(log_module, "starting timer: loop=%lu, handle=%lu", data.m_handle, timer);
+    looper_trace_debug(log_module, "starting timer: loop=%lu, handle=%lu", data.m_handle, timer);
 
-        impl::add_timer(data.m_context, &timer_data);
-    }
+    auto& timer_impl = data.m_timers[timer];
+    timer_impl.start();
 }
 
-void stop_timer(timer timer) {
+void stop_timer(const timer timer) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(timer);
 
-    auto& timer_data = data.m_timers[timer];
-    if (timer_data.running) {
-        looper_trace_debug(log_module, "stopping timer: loop=%lu, handle=%lu", data.m_handle, timer);
+    looper_trace_debug(log_module, "stopping timer: loop=%lu, handle=%lu", data.m_handle, timer);
 
-        impl::remove_timer(data.m_context, &timer_data);
-    }
+    auto& timer_impl = data.m_timers[timer];
+    timer_impl.stop();
 }
 
-void reset_timer(timer timer) {
+void reset_timer(const timer timer) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(timer);
 
-    auto& timer_data = data.m_timers[timer];
-    if (timer_data.running) {
-        looper_trace_debug(log_module, "resetting timer: loop=%lu, handle=%lu", data.m_handle, timer);
+    looper_trace_debug(log_module, "resetting timer: loop=%lu, handle=%lu", data.m_handle, timer);
 
-        impl::reset_timer(data.m_context, &timer_data);
-    }
+    auto& timer_impl = data.m_timers[timer];
+    timer_impl.reset();
 }
 
 }

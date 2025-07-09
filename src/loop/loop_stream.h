@@ -1,10 +1,11 @@
 #pragma once
 
-#include "loop_structs.h"
+#include "loop_resource.h"
 
 namespace looper::impl {
 
-struct stream_data {
+class stream : protected looper_resource {
+public:
     struct write_request {
         std::unique_ptr<uint8_t[]> buffer;
         size_t pos;
@@ -14,62 +15,42 @@ struct stream_data {
         looper::error error;
     };
 
-    using loop_read_callback = std::function<void(stream_data*, std::span<const uint8_t>, looper::error)>;
-    using loop_write_callback = std::function<void(stream_data*, write_request&)>;
-    using read_function = std::function<looper::error(uint8_t* buffer, size_t buffer_size, size_t& read_out)>;
-    using write_function = std::function<looper::error(const uint8_t* buffer, size_t size, size_t& written_out)>;
+    explicit stream(handle handle, loop_context* context);
 
-    explicit stream_data(const handle handle)
-        : handle(handle)
-        , is_errored(false)
-        , can_read(false)
-        , can_write(false)
-        , read_func(nullptr)
-        , write_func(nullptr)
-        , user_read_callback(nullptr)
-        , write_requests()
-        , completed_write_requests()
-        , resource(empty_handle)
-        , reading(false)
-        , write_pending(false)
-        , from_loop_read_callback(nullptr)
-        , from_loop_write_callback(nullptr)
-    {}
+    void start_read(read_callback&& callback);
+    void stop_read();
+    void write(write_request&& request);
 
-    looper::handle handle;
+protected:
+    virtual void handle_events(std::unique_lock<std::mutex>& lock, event_types events) override;
 
-    bool is_errored;
-    bool can_read;
-    bool can_write;
+    void set_read_enabled(bool enabled);
+    void set_write_enabled(bool enabled);
+    bool is_errored() const;
+    void mark_errored();
+    void verify_not_errored() const;
 
-    read_function read_func;
-    write_function write_func;
+    virtual looper::error read_from_obj(uint8_t* buffer, size_t buffer_size, size_t& read_out) = 0;
+    virtual looper::error write_to_obj(const uint8_t* buffer, size_t size, size_t& written_out) = 0;
 
-    read_callback user_read_callback;
-    std::deque<write_request> write_requests;
-    std::deque<write_request> completed_write_requests;
+    looper::handle m_handle;
 
-    // managed in loop
-    looper::impl::resource resource;
-    bool reading;
-    bool write_pending;
+private:
+    void handle_read(std::unique_lock<std::mutex>& lock);
+    void handle_write(std::unique_lock<std::mutex>& lock);
+    void report_write_requests_finished(std::unique_lock<std::mutex>& lock);
+    bool do_write();
 
-    loop_read_callback from_loop_read_callback;
-    loop_write_callback from_loop_write_callback;
+    bool m_is_errored;
+    bool m_can_read;
+    bool m_can_write;
+
+    read_callback m_user_read_callback;
+    std::deque<write_request> m_write_requests;
+    std::deque<write_request> m_completed_write_requests;
+
+    bool m_reading;
+    bool m_write_pending;
 };
-
-void stream_handle_read(std::unique_lock<std::mutex>& lock, loop_context* context, stream_data* stream);
-void stream_handle_write(std::unique_lock<std::mutex>& lock, loop_context* context, stream_data* stream);
-
-void init_stream(
-    stream_data* stream,
-    handle handle,
-    resource resource,
-    stream_data::read_function&& read_func,
-    stream_data::write_function&& write_func);
-
-void start_stream_read(loop_context* context, stream_data* stream, read_callback&& callback);
-void stop_stream_read(loop_context* context, stream_data* stream);
-void write_stream(loop_context* context, stream_data* stream, stream_data::write_request&& request);
 
 }

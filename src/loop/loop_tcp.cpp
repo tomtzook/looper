@@ -1,147 +1,95 @@
 
 #include "loop_internal.h"
-
+#include "loop_tcp.h"
 
 namespace looper::impl {
 
 #define log_module loop_log_module "_tcp"
 
-static void tcp_resource_handle_connect(std::unique_lock<std::mutex>& lock, loop_context* context, tcp_data* tcp) {
-    // finish connect
-    auto error = os::tcp::finalize_connect(tcp->socket_obj.get());
+tcp::tcp(const looper::tcp handle, loop_context *context)
+    : stream(handle, context)
+    , m_state(state::open)
+    , m_socket_obj(os::make_tcp()) {
+    attach_to_loop(os::tcp::get_descriptor(m_socket_obj.get()), 0);
+}
+
+tcp::tcp(const looper::tcp handle, loop_context *context, os::tcp_ptr&& socket)
+    : stream(handle, context)
+    , m_state(state::connected)
+    , m_socket_obj(std::move(socket)) {
+    std::unique_lock lock(m_context->mutex);
+    attach_to_loop(os::tcp::get_descriptor(m_socket_obj.get()), 0);
+    set_read_enabled(true);
+    set_write_enabled(true);
+}
+
+void tcp::bind(const uint16_t port) {
+    std::unique_lock lock(m_context->mutex);
+
+    verify_not_errored();
+
+    OS_CHECK_THROW(os::tcp::bind(m_socket_obj.get(), port));
+}
+
+void tcp::bind(const std::string_view address, const uint16_t port) {
+    std::unique_lock lock(m_context->mutex);
+
+    verify_not_errored();
+
+    OS_CHECK_THROW(os::tcp::bind(m_socket_obj.get(), address, port));
+}
+
+void tcp::connect(const std::string_view address, const uint16_t port, tcp_callback&& callback) {
+    std::unique_lock lock(m_context->mutex);
+
+    verify_not_errored();
+
+    if (m_state != state::open) {
+        throw std::runtime_error("tcp state invalid for connect");
+    }
+
+    looper_trace_info(log_module, "connecting tcp: ptr=0x%x", this);
+
+    m_connect_callback = callback;
+    m_state = state::connecting;
+    const auto error = os::tcp::connect(m_socket_obj.get(), address, port);
     if (error == error_success) {
-        tcp->state = tcp_data::state::connected;
-        looper_trace_debug(log_module, "tcp connect finish: ptr=0x%x", tcp);
+        // connection finished
+        on_connect_done(lock);
+    } else if (error == error_in_progress) {
+        // wait for connection finish
+        request_events(event_out, events_update_type::append);
+        looper_trace_info(log_module, "tcp connection not finished: ptr=0x%x", this);
     } else {
-        tcp->state = tcp_data::state::errored;
-        looper_trace_error(log_module, "tcp connect error: ptr=0x%x, code=%lu", tcp, error);
-    }
-
-    request_resource_events(context, tcp->resource, event_out, events_update_type::remove);
-    invoke_func<std::mutex, tcp_data*, looper::error>
-            (lock, "tcp_loop_callback", tcp->from_loop_connect_callback, tcp, error);
-}
-
-static void tcp_resource_handle_connected_read(std::unique_lock<std::mutex>& lock, loop_context* context, tcp_data* tcp) {
-    if (!tcp->reading) {
-        request_resource_events(context, tcp->resource, event_in, events_update_type::remove);
-        return;
-    }
-
-    std::span<const uint8_t> data{};
-    size_t read;
-    auto error = os::tcp::read(tcp->socket_obj.get(), context->read_buffer, sizeof(context->read_buffer), read);
-    if (error == error_success) {
-        data = std::span<const uint8_t>{context->read_buffer, read};
-        looper_trace_debug(log_module, "tcp read new data: ptr=0x%x, data_size=%lu", tcp, data.size());
-    } else {
-        tcp->state = tcp_data::state::errored;
-        looper_trace_error(log_module, "tcp read error: ptr=0x%x, code=%lu", tcp, error);
-    }
-
-    invoke_func<std::mutex, tcp_data*, std::span<const uint8_t>, looper::error>
-            (lock, "tcp_loop_callback", tcp->from_loop_read_callback, tcp, data, error);
-}
-
-static bool do_tcp_write(tcp_data* tcp) {
-    // todo: better use of queues
-    // todo: use iovec
-
-    static constexpr size_t max_writes_to_do_in_one_iteration = 16;
-
-    // only write up to 16 requests, so as not to starve the loop with writes
-    size_t write_count = max_writes_to_do_in_one_iteration;
-
-    while (!tcp->write_requests.empty() && (write_count--) > 0) {
-        auto& request = tcp->write_requests.front();
-
-        size_t written;
-        auto error = os::tcp::write(tcp->socket_obj.get(), request.buffer.get() + request.pos, request.size, written);
-        if (error == error_success) {
-            request.pos += written;
-            if (request.pos < request.size) {
-                // didn't finish write
-                return true;
-            }
-
-            looper_trace_debug(log_module, "tcp write request finished: ptr=0x%x", tcp);
-            request.error = error_success;
-
-            tcp->completed_write_requests.push_back(std::move(request));
-            tcp->write_requests.pop_front();
-        } else if (error == error_in_progress || error == error_again) {
-            // didn't finish write, but need to try again later
-            return true;
-        } else {
-            looper_trace_error(log_module, "tcp write request failed: ptr=0x%x, code=%lu", tcp, error);
-            request.error = error;
-
-            tcp->completed_write_requests.push_back(std::move(request));
-            tcp->write_requests.pop_front();
-
-            return false;
-        }
-    }
-
-    return true;
-}
-
-static void report_write_requests_finished(std::unique_lock<std::mutex>& lock, tcp_data* tcp) {
-    while (!tcp->completed_write_requests.empty()) {
-        auto& request = tcp->completed_write_requests.front();
-        invoke_func<std::mutex, tcp_data*, tcp_data::write_request&>
-                (lock, "tcp_loop_callback", tcp->from_loop_write_callback, tcp, request);
-
-        tcp->completed_write_requests.pop_front();
+        on_connect_done(lock, error);
     }
 }
 
-static void tcp_resource_handle_connected_write(std::unique_lock<std::mutex>& lock, loop_context* context, tcp_data* tcp) {
-    if (!tcp->write_pending) {
-        request_resource_events(context, tcp->resource, event_out, events_update_type::remove);
-        return;
+void tcp::close() {
+    std::unique_lock lock(m_context->mutex);
+
+    if (m_socket_obj) {
+        m_socket_obj.reset();
     }
 
-    if (!do_tcp_write(tcp)) {
-        tcp->state = tcp_data::state::errored;
-        tcp->write_pending = false;
-        request_resource_events(context, tcp->resource, event_out, events_update_type::remove);
-    } else {
-        if (tcp->write_requests.empty()) {
-            tcp->write_pending = false;
-            request_resource_events(context, tcp->resource, event_out, events_update_type::remove);
-        }
-    }
+    set_read_enabled(false);
+    set_write_enabled(false);
+    m_state = state::closed;
 
-    report_write_requests_finished(lock, tcp);
+    detach_from_loop();
 }
 
-static void udp_resource_handler(loop_context* context, void* ptr, event_types events) {
-    std::unique_lock lock(context->mutex);
-
-    auto* data = reinterpret_cast<tcp_data*>(ptr);
-    if (data->resource == empty_handle) {
-        return;
-    }
-
-    switch (data->state) {
-        case tcp_data::state::connecting: {
+void tcp::handle_events(std::unique_lock<std::mutex>& lock, const event_types events) {
+    switch (m_state) {
+        case state::connecting: {
             if ((events & event_out) != 0) {
-                tcp_resource_handle_connect(lock, context, data);
+                handle_connect(lock);
             }
 
             break;
         }
-        case tcp_data::state::connected: {
-            if ((events & event_in) != 0) {
-                // new data
-                tcp_resource_handle_connected_read(lock, context, data);
-            }
-
-            if ((events & event_out) != 0) {
-                tcp_resource_handle_connected_write(lock, context, data);
-            }
-
+        case state::connected: {
+            stream::handle_events(lock, events);
             break;
         }
         default:
@@ -149,153 +97,95 @@ static void udp_resource_handler(loop_context* context, void* ptr, event_types e
     }
 }
 
-static void tcp_server_resource_handler(loop_context* context, void* ptr, event_types events) {
-    std::unique_lock lock(context->mutex);
-
-    auto* tcp = reinterpret_cast<tcp_server_data*>(ptr);
-    if (tcp->resource == empty_handle) {
-        return;
-    }
-
-    if ((events & event_in) != 0) {
-        // new data
-        invoke_func(lock, "tcp_server_callback", tcp->callback, tcp);
-    }
+looper::error tcp::read_from_obj(uint8_t* buffer, const size_t buffer_size, size_t& read_out) {
+    return os::tcp::read(m_socket_obj.get(), buffer, buffer_size, read_out);
 }
 
-void add_tcp(loop_context* context, tcp_data* tcp) {
-    std::unique_lock lock(context->mutex);
-
-    auto resource = add_resource(context,
-                                 os::tcp::get_descriptor(tcp->socket_obj.get()),
-                                 0,
-                                 udp_resource_handler, tcp);
-    tcp->resource = resource;
-
-    looper_trace_info(log_module, "adding tcp: ptr=0x%x, resource_handle=%lu", tcp, resource);
+looper::error tcp::write_to_obj(const uint8_t* buffer, const size_t size, size_t& written_out) {
+    return os::tcp::write(m_socket_obj.get(), buffer, size, written_out);
 }
 
-void remove_tcp(loop_context* context, tcp_data* tcp) {
-    std::unique_lock lock(context->mutex);
-
-    looper_trace_info(log_module, "removing tcp: ptr=0x%x, resource_handle=%lu", tcp, tcp->resource);
-
-    if (tcp->resource != empty_handle) {
-        remove_resource(context, tcp->resource);
-        tcp->resource = empty_handle;
-    }
+void tcp::handle_connect(std::unique_lock<std::mutex>& lock) {
+    // finish connect
+    const auto error = os::tcp::finalize_connect(m_socket_obj.get());
+    request_events(event_out, events_update_type::remove);
+    on_connect_done(lock, error);
 }
 
-void connect_tcp(loop_context* context, tcp_data* tcp, std::string_view server_address, uint16_t server_port) {
-    std::unique_lock lock(context->mutex);
-
-    if (tcp->resource == empty_handle) {
-        throw std::runtime_error("tcp has bad resource handle");
-    }
-    if (tcp->state != tcp_data::state::open) {
-        throw std::runtime_error("tcp state invalid for connect");
-    }
-
-    looper_trace_info(log_module, "connecting tcp: ptr=0x%x", tcp);
-
-    tcp->state = tcp_data::state::connecting;
-    auto error = os::tcp::connect(tcp->socket_obj.get(), server_address, server_port);
+void tcp::on_connect_done(std::unique_lock<std::mutex>& lock, const error error) {
     if (error == error_success) {
         // connection finished
-        tcp->state = tcp_data::state::connected;
+        m_state = state::connected;
+        looper_trace_info(log_module, "connected tcp: ptr=0x%x", this);
 
-        looper_trace_info(log_module, "connected tcp inplace: ptr=0x%x", tcp);
-        invoke_func<>(lock, "tcp_loop_callback", tcp->from_loop_connect_callback, tcp, 0);
-    } else if (error == error_in_progress) {
-        // wait for connection finish
-        request_resource_events(context, tcp->resource, event_out, events_update_type::append);
-        looper_trace_info(log_module, "tcp connection not finished: ptr=0x%x", tcp);
+        set_read_enabled(true);
+        set_write_enabled(true);
+
+        invoke_func<>(lock, "tcp_loop_callback", m_connect_callback, m_context->handle, m_handle, error);
     } else {
-        tcp->state = tcp_data::state::errored;
-
-        looper_trace_error(log_module, "tcp connection failed: ptr=0x%x, code=%s", tcp, error);
-        invoke_func<>(lock, "tcp_loop_callback", tcp->from_loop_connect_callback, tcp, error);
+        mark_errored();
+        looper_trace_error(log_module, "tcp connection failed: ptr=0x%x, code=%s", this, error);
+        invoke_func<>(lock, "tcp_loop_callback", m_connect_callback, m_context->handle, m_handle, error);
     }
 }
 
-void start_tcp_read(loop_context* context, tcp_data* tcp) {
-    std::unique_lock lock(context->mutex);
-
-    if (tcp->resource == empty_handle) {
-        throw std::runtime_error("tcp has bad resource handle");
-    }
-    if (tcp->state != tcp_data::state::connected) {
-        throw std::runtime_error("tcp state invalid for read");
-    }
-    if (tcp->reading) {
-        throw std::runtime_error("tcp already reading");
-    }
-
-    looper_trace_info(log_module, "tcp starting read: ptr=0x%x", tcp);
-
-    request_resource_events(context, tcp->resource, event_in, events_update_type::append);
-    tcp->reading = true;
+tcp_server::tcp_server(const looper::tcp_server handle, loop_context *context)
+    : looper_resource(context)
+    , m_handle(handle)
+    , m_socket_obj(os::make_tcp())
+    , m_callback(nullptr) {
+    attach_to_loop(os::tcp::get_descriptor(m_socket_obj.get()), 0);
 }
 
-void stop_tcp_read(loop_context* context, tcp_data* tcp) {
-    std::unique_lock lock(context->mutex);
+void tcp_server::bind(const uint16_t port) {
+    std::unique_lock lock(m_context->mutex);
 
-    if (tcp->resource == empty_handle) {
-        throw std::runtime_error("tcp has bad resource handle");
-    }
-    if (tcp->state != tcp_data::state::connected) {
-        throw std::runtime_error("tcp state invalid for read");
-    }
-    if (!tcp->reading) {
-        return;
-    }
-
-    looper_trace_info(log_module, "tcp stopping read: ptr=0x%x", tcp);
-
-    tcp->reading = false;
-    request_resource_events(context, tcp->resource, event_in, events_update_type::remove);
+    OS_CHECK_THROW(os::tcp::bind(m_socket_obj.get(), port));
 }
 
-void write_tcp(loop_context* context, tcp_data* tcp, tcp_data::write_request&& request) {
-    std::unique_lock lock(context->mutex);
+void tcp_server::bind(const std::string_view address, const uint16_t port) {
+    std::unique_lock lock(m_context->mutex);
 
-    if (tcp->resource == empty_handle) {
-        throw std::runtime_error("tcp has bad resource handle");
-    }
-    if (tcp->state != tcp_data::state::connected) {
-        throw std::runtime_error("tcp state invalid for write");
-    }
-
-    looper_trace_info(log_module, "tcp writing: ptr=0x%x, buffer_size=%lu", tcp, request.size);
-
-    tcp->write_requests.push_back(std::move(request));
-
-    if (!tcp->write_pending) {
-        request_resource_events(context, tcp->resource, event_out, events_update_type::append);
-        tcp->write_pending = true;
-    }
+    OS_CHECK_THROW(os::tcp::bind(m_socket_obj.get(), address, port));
 }
 
-void add_tcp_server(loop_context* context, tcp_server_data* tcp) {
-    std::unique_lock lock(context->mutex);
+void tcp_server::listen(const size_t backlog, tcp_server_callback&& callback) {
+    std::unique_lock lock(m_context->mutex);
 
-    auto resource = add_resource(context,
-                                 os::tcp::get_descriptor(tcp->socket_obj.get()),
-                                 event_in,
-                                 tcp_server_resource_handler, tcp);
-    tcp->resource = resource;
+    OS_CHECK_THROW(os::tcp::listen(m_socket_obj.get(), backlog));
+    m_callback = callback;
 
-    looper_trace_info(log_module, "adding tcp server: ptr=0x%x, resource_handle=%lu", tcp, resource);
+    request_events(event_in, events_update_type::append);
 }
 
-void remove_tcp_server(loop_context* context, tcp_server_data* tcp) {
-    std::unique_lock lock(context->mutex);
+std::unique_ptr<tcp> tcp_server::accept(looper::handle handle) {
+    std::unique_lock lock(m_context->mutex);
 
-    looper_trace_info(log_module, "removing tcp server: ptr=0x%x, resource_handle=%lu", tcp, tcp->resource);
+    // unlock for the duration of the accept process
+    lock.unlock();
+    os::tcp::tcp* tcp_struct;
+    OS_CHECK_THROW(os::tcp::accept(m_socket_obj.get(), &tcp_struct));
+    auto socket = os::make_tcp(tcp_struct);
 
-    if (tcp->resource != empty_handle) {
-        remove_resource(context, tcp->resource);
-        tcp->resource = empty_handle;
+    // lock for the creation of the new client looper object
+    lock.lock();
+    return std::make_unique<tcp>(handle, m_context, std::move(socket));
+}
+
+void tcp_server::close() {
+    std::unique_lock lock(m_context->mutex);
+
+    if (m_socket_obj) {
+        m_socket_obj.reset();
+    }
+
+    detach_from_loop();
+}
+
+void tcp_server::handle_events(std::unique_lock<std::mutex>& lock, const event_types events) {
+    if ((events & event_in) != 0) {
+        // new data
+        invoke_func(lock, "tcp_server_callback", m_callback, m_context->handle, m_handle);
     }
 }
 

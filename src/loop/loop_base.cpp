@@ -7,8 +7,7 @@ namespace looper::impl {
 
 constexpr event_types must_have_events = event_error | event_hung;
 
-
-static void process_update(loop_context* context, update& update) {
+static void process_update(loop_context* context, const update& update) {
     if (!context->resource_table.has(update.handle)) {
         return;
     }
@@ -56,11 +55,13 @@ static void process_update(loop_context* context, update& update) {
     }
 }
 
-loop_context::loop_context()
-        : mutex()
+loop_context::loop_context(const looper::loop handle)
+        : handle(handle)
+        , mutex()
         , poller(os::make_poller())
         , timeout(initial_poll_timeout)
         , run_loop_event(os::make_event())
+        , event_data{}
         , stop(false)
         , executing(false)
         , run_finished()
@@ -69,13 +70,8 @@ loop_context::loop_context()
         , futures()
         , timers()
         , updates()
-        , timer_call_holder()
-        , future_call_holder()
-        , read_buffer()
-        , event_data{} {
+        , read_buffer() {
     updates.resize(initial_reserve_size);
-    timer_call_holder.reserve(initial_reserve_size);
-    future_call_holder.reserve(initial_reserve_size);
 }
 
 std::chrono::milliseconds time_now() {
@@ -86,6 +82,17 @@ std::chrono::milliseconds time_now() {
 void signal_run(loop_context* context) {
     looper_trace_debug(log_module, "signalling loop run: context=0x%x", context);
     os::event::set(context->run_loop_event.get());
+}
+
+void reset_smallest_timeout(loop_context* context) {
+    std::chrono::milliseconds timeout = initial_poll_timeout;
+    for (auto* timer : context->timers) {
+        if (timer->timeout < timeout) {
+            timeout = timer->timeout;
+        }
+    }
+
+    context->timeout = timeout;
 }
 
 resource add_resource(

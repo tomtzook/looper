@@ -54,6 +54,13 @@ set(SOURCES
         src/loop/loop_udp.cpp
         src/loop/loop_file.cpp
         src/loop/loop_stream.cpp
+        src/loop/loop_resource.cpp
+        src/loop/loop_udp.h
+        src/loop/loop_file.h
+        src/loop/loop_event.cpp
+        src/loop/loop_timer.cpp
+        src/loop/loop_future.h
+        src/loop/loop_future.cpp
 )
 
 if (UNIX)

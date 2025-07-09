@@ -192,18 +192,29 @@ public:
         handle handle(m_parent, m_type, index);
         const auto handle_raw = handle.raw();
 
-        auto data = std::make_unique<type_>(handle_raw, args...);
+        auto data = std::make_unique<type_>(handle_raw, std::forward<arg_>(args)...);
         return {handle_raw, std::move(data)};
     }
 
     template<typename... arg_>
     std::pair<handle_raw, type_&> assign_new(arg_&&... args) {
-        auto [handle, data] = this->allocate_new(args...);
+        auto [handle, data] = this->allocate_new(std::forward<arg_>(args)...);
         return assign(handle, std::move(data));
     }
 
-    std::pair<handle_raw, type_&> assign(handle_raw new_handle, std::unique_ptr<type_>&& ptr) {
-        auto handle = valid_handle_for_us(new_handle);
+    handle_raw reserve() const {
+        const auto spot = find_next_available_spot();
+        if (spot < 0) {
+            throw no_space_exception();
+        }
+
+        const auto index = static_cast<uint16_t>(spot);
+        const handle handle(m_parent, m_type, index);
+        return  handle.raw();
+    }
+
+    std::pair<handle_raw, type_&> assign(const handle_raw new_handle, std::unique_ptr<type_>&& ptr) {
+        const auto handle = valid_handle_for_us(new_handle);
         auto index = handle.index();
 
         if (m_data[index]) {
