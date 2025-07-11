@@ -64,6 +64,8 @@ set(SOURCES
         src/sip/serialization.cpp
         src/sip/base.cpp
         src/sip/message.cpp
+        src/sip/session.cpp
+        src/util/buffer.cpp
 )
 
 if (UNIX)

@@ -19,6 +19,7 @@
 #include "loop/loop_event.h"
 #include "loop/loop_tcp.h"
 #include "loop/loop_udp.h"
+#include "sip/session.h"
 
 namespace looper {
 
@@ -28,7 +29,7 @@ static constexpr size_t handle_counts_per_type = 64;
 static constexpr size_t loops_count = 8;
 
 struct loop_data {
-    explicit loop_data(loop handle)
+    explicit loop_data(const loop handle)
         : m_handle(handle)
         , m_context(impl::create_loop(handle))
         , m_closing(false)
@@ -39,6 +40,7 @@ struct loop_data {
         , m_tcps(handles::handle{handle}.index(), handles::type_tcp)
         , m_tcp_servers(handles::handle{handle}.index(), handles::type_tcp_server)
         , m_udps(handles::handle{handle}.index(), handles::type_udp)
+        , m_sip_sessions(handles::handle{handle}.index(), handles::type_sip_session)
     {}
     ~loop_data() {
         if (m_thread && m_thread->joinable()) {
@@ -72,6 +74,7 @@ struct loop_data {
     handles::handle_table<impl::tcp, handle_counts_per_type> m_tcps;
     handles::handle_table<impl::tcp_server, handle_counts_per_type> m_tcp_servers;
     handles::handle_table<impl::udp, handle_counts_per_type> m_udps;
+    handles::handle_table<impl::sip::session, handle_counts_per_type> m_sip_sessions;
 };
 
 struct looper_data {
@@ -93,7 +96,7 @@ struct looper_data {
 
 looper_data& get_global_loop_data();
 
-static inline std::optional<loop_data*> try_get_loop(loop loop) {
+static inline std::optional<loop_data*> try_get_loop(const loop loop) {
     if (!get_global_loop_data().m_loops.has(loop)) {
         return std::nullopt;
     }
@@ -106,7 +109,7 @@ static inline std::optional<loop_data*> try_get_loop(loop loop) {
     return {&data};
 }
 
-static inline loop_data& get_loop(loop loop) {
+static inline loop_data& get_loop(const loop loop) {
     auto& data = get_global_loop_data().m_loops[loop];
     if (data.m_closing) {
         throw loop_closing_exception(loop);
@@ -115,14 +118,14 @@ static inline loop_data& get_loop(loop loop) {
     return data;
 }
 
-static inline loop get_loop_handle(handle handle) {
-    handles::handle full(handle);
-    handles::handle loop(0, handles::type_loop, full.parent());
+static inline loop get_loop_handle(const handle handle) {
+    const handles::handle full(handle);
+    const handles::handle loop(0, handles::type_loop, full.parent());
     return loop.raw();
 }
 
-static inline loop_data& get_loop_from_handle(handle handle) {
-    auto loop_handle = get_loop_handle(handle);
+static inline loop_data& get_loop_from_handle(const handle handle) {
+    const auto loop_handle = get_loop_handle(handle);
     return get_loop(loop_handle);
 }
 

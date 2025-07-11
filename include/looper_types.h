@@ -22,6 +22,7 @@ using timer = handle;
 using tcp = handle;
 using tcp_server = handle;
 using udp = handle;
+using sip_session = handle;
 
 struct inet_address {
     std::string_view ip;

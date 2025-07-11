@@ -77,21 +77,34 @@ void register_body() {
 
 }
 
+class message;
+
+void read_headers(std::istream& is, message& msg);
+void read_body(std::istream& is, message& msg);
+ssize_t read_message(std::span<const uint8_t> buffer, message& msg);
+
+void write_headers(std::ostream& os, const message& msg);
+void write_body(std::ostream& os, const message& msg);
+ssize_t write_message(std::span<uint8_t> buffer, const message& msg);
+
+std::istream& operator>>(std::istream& is, message& msg);
+std::ostream& operator<<(std::ostream& os, const message& msg);
+
 class message {
 public:
     message() = default;
     ~message() = default;
 
-    bool is_request() const;
+    [[nodiscard]] bool is_request() const;
 
-    sip::request_line request_line() const;
+    [[nodiscard]] sip::request_line request_line() const;
     void set_request_line(const sip::request_line& line);
 
-    sip::status_line status_line() const;
+    [[nodiscard]] sip::status_line status_line() const;
     void set_status_line(const sip::status_line& line);
 
     template<headers::_header_type T>
-    bool has_header() const;
+    [[nodiscard]] bool has_header() const;
     template<headers::_header_type T>
     T header() const;
     template<headers::_header_type T>
@@ -99,24 +112,26 @@ public:
     template<headers::_header_type T>
     void add_header(const T& header);
 
-    bool has_body() const;
+    [[nodiscard]] bool has_body() const;
     template<bodies::_body_type T>
     T body() const;
     template<bodies::_body_type T>
     void set_body(const T& body);
 
-    std::istream& operator>>(std::istream& is);
-    std::ostream& operator<<(std::ostream& os);
-
 private:
     void add_header(const std::string& name, std::unique_ptr<headers::_base_header_holder> holder);
     void set_body(std::unique_ptr<bodies::body> body);
 
-    bool m_is_request;
+    bool m_is_request = false;
     std::optional<sip::request_line> m_request_line;
     std::optional<sip::status_line> m_status_line;
     std::map<std::string, std::vector<std::unique_ptr<headers::_base_header_holder>>> m_headers;
     std::unique_ptr<bodies::body> m_body;
+
+    friend void read_headers(std::istream& is, message& msg);
+    friend void read_body(std::istream& is, message& msg);
+    friend void write_headers(std::ostream& os, const message& msg);
+    friend void write_body(std::ostream& os, const message& msg);
 };
 
 template<headers::_header_type T>

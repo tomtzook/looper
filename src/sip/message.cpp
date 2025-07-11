@@ -73,6 +73,222 @@ class not_a_request final : public std::exception {
 class not_a_response final : public std::exception {
 };
 
+class istream_buff final : public std::streambuf {
+public:
+    explicit istream_buff(const std::span<const uint8_t> buffer) {
+        auto* ptr = const_cast<char*>(reinterpret_cast<const char*>(buffer.data()));
+        setg(ptr, ptr, ptr + buffer.size());
+    }
+
+    pos_type seekoff(const off_type off, const std::ios_base::seekdir dir, std::ios_base::openmode) override {
+        if (dir == std::ios_base::cur) {
+            gbump(static_cast<int>(off));
+        } else if (dir == std::ios_base::end) {
+            setg(eback(), egptr() + off, egptr());
+        } else if (dir == std::ios_base::beg) {
+            setg(eback(), eback() + off, egptr());
+        }
+
+        return gptr() - eback();
+    }
+
+    pos_type seekpos(const pos_type pos, std::ios_base::openmode) override {
+        setg(eback(), eback() + pos, egptr());
+        return gptr() - eback();
+    }
+};
+
+class ostream_buff final : public std::streambuf {
+public:
+    explicit ostream_buff(const std::span<uint8_t> buffer) {
+        auto* ptr = reinterpret_cast<char*>(buffer.data());
+        setp(ptr, ptr + buffer.size());
+    }
+
+    pos_type seekoff(const off_type off, const std::ios_base::seekdir dir, std::ios_base::openmode) override {
+        if (dir == std::ios_base::cur) {
+            pbump(static_cast<int>(off));
+        } else {
+            return pos_type(-1);
+        }
+
+        return pptr() - pbase();
+    }
+};
+
+void read_headers(std::istream& is, message& msg) {
+    // read request/status line
+    {
+        std::regex pattern(R"(^(?:(?:(\w+)\s(.+)\sSIP\/(2\.0))|(?:SIP\/(2\.0)\s(\d+)\s(.+)))$)");
+        const auto line = serialization::read_line(is);
+        const auto match = serialization::parse(line, pattern);
+
+        std::stringstream top_line_ss(line);
+        if (match[1].matched && match[2].matched && match[3].matched) {
+            // request
+            sip::request_line request_line;
+            sip::read_header_request_line(top_line_ss, request_line);
+            msg.set_request_line(request_line);
+        } else if (match[4].matched && match[5].matched && match[6].matched) {
+            // status
+            sip::status_line status_line;
+            sip::read_header_status_line(top_line_ss, status_line);
+            msg.set_status_line(status_line);
+        } else {
+            throw unknown_request_or_status_line();
+        }
+
+        serialization::consume_whitespaces(is);
+        serialization::consume(is, '\r');
+        serialization::consume(is, '\n');
+    }
+
+    while (is.peek() != std::char_traits<char>::eof()) {
+        // read header
+        const auto name = serialization::read_until(is, ':');
+        serialization::consume(is, ':');
+        serialization::consume_whitespaces(is);
+
+        auto holder_opt = headers::_create_header(name);
+        if (holder_opt) {
+            auto holder = std::move(holder_opt.value());
+            holder->read(is);
+            msg.add_header(name, std::move(holder));
+        } else {
+            auto holder = std::make_unique<headers::_header_holder<headers::generic_header>>();
+            holder->value.name = name;
+            holder->read(is);
+            msg.add_header(name, std::move(holder));
+        }
+
+        serialization::consume_whitespaces(is);
+        serialization::consume(is, '\r');
+        serialization::consume(is, '\n');
+
+        if (is.peek() == '\r') {
+            serialization::consume(is, '\r');
+            serialization::consume(is, '\n');
+            break;
+        }
+    }
+}
+
+void read_body(std::istream& is, message& msg) {
+    if (is.peek() != std::char_traits<char>::eof()) {
+        // read body
+        if (msg.has_header<headers::content_type>()) {
+            const auto content_type_header = msg.header<headers::content_type>();
+            const auto content_type = content_type_header.value;
+
+            auto body_opt = bodies::_create_body(content_type);
+            if (body_opt) {
+                auto body = std::move(body_opt.value());
+                body->operator>>(is);
+                msg.set_body(std::move(body));
+            } else {
+                std::string body_data;
+                is >> body_data;
+
+                auto body = std::make_unique<bodies::generic_body>();
+                body->m_content_type = content_type;
+                body->m_data = body_data;
+                msg.set_body(std::move(body));
+            }
+        } else {
+            std::string body_data;
+            is >> body_data;
+
+            auto body = std::make_unique<bodies::generic_body>();
+            body->m_data = body_data;
+            msg.set_body(std::move(body));
+        }
+    }
+}
+
+ssize_t read_message(const std::span<const uint8_t> buffer, message& msg) {
+    istream_buff buf(buffer);
+    std::istream is(&buf);
+    read_headers(is, msg);
+
+    size_t expected_body_size;
+    if (msg.has_header<headers::content_length>()) {
+        expected_body_size = msg.header<headers::content_length>().value;
+    } else {
+        expected_body_size = 0;
+    }
+
+    if (static_cast<size_t>(is.tellg()) + expected_body_size > buffer.size()) {
+        return -1;
+    }
+
+    if (expected_body_size > 0) {
+        read_body(is, msg);
+    }
+
+    return is.tellg();
+}
+
+void write_headers(std::ostream& os, const message& msg) {
+    // dump request/status line
+    {
+        if (msg.m_request_line) {
+            sip::write_header_request_line(os, msg.m_request_line.value());
+        } else if (msg.m_status_line) {
+            sip::write_header_status_line(os, msg.m_status_line.value());
+        } else {
+            throw unknown_request_or_status_line();
+        }
+
+        os << "\r\n";
+    }
+
+    bool wrote_header = false;
+    // dump headers
+    for (auto& [name, holders] : msg.m_headers) {
+        for (const auto& holder : holders) {
+            os << name << ": ";
+            holder->write(os);
+            os << "\r\n";
+            wrote_header = true;
+        }
+    }
+
+    // dump body
+    os << "\r\n";
+    if (!wrote_header) {
+        os << "\r\n";
+    }
+}
+
+void write_body(std::ostream& os, const message& msg) {
+    if (msg.m_body) {
+        msg.m_body->operator<<(os);
+    }
+}
+
+ssize_t write_message(const std::span<uint8_t> buffer, const message& msg) {
+    ostream_buff buf(buffer);
+    std::ostream os(&buf);
+
+    write_headers(os, msg);
+    write_body(os, msg);
+
+    std::cout << os.bad() << ", " << os.rdstate() << std::endl;
+    return os.tellp();
+}
+
+std::istream& operator>>(std::istream& is, message& msg) {
+    read_headers(is, msg);
+    read_body(is, msg);
+    return is;
+}
+
+std::ostream& operator<<(std::ostream& os, const message& msg) {
+    write_headers(os, msg);
+    write_body(os, msg);
+    return os;
+}
+
 bool message::is_request() const {
     return m_is_request;
 }
@@ -102,138 +318,11 @@ sip::status_line message::status_line() const {
 void message::set_status_line(const sip::status_line& line) {
     m_is_request = false;
     m_status_line = line;
-    m_status_line = std::nullopt;
+    m_request_line = std::nullopt;
 }
 
 bool message::has_body() const {
     return static_cast<bool>(m_body);
-}
-
-std::istream& message::operator>>(std::istream& is) {
-    // read request/status line
-    {
-        std::regex pattern("^(?:(?:(\\w+)\\s(.+)\\sSIP\\/(2\\.0))|(?:SIP\\/(2\\.0)\\s(\\d+)\\s(.+)))$");
-        const auto line = serialization::read_line(is);
-        const auto match = serialization::parse(line, pattern);
-
-        std::stringstream top_line_ss(line);
-        if (match[1].matched && match[2].matched && match[3].matched) {
-            // request
-            sip::request_line request_line;
-            sip::read_header_request_line(top_line_ss, request_line);
-            m_request_line = request_line;
-        } else if (match[4].matched && match[5].matched && match[6].matched) {
-            // status
-            sip::status_line status_line;
-            sip::read_header_status_line(top_line_ss, status_line);
-            m_status_line = status_line;
-        } else {
-            throw unknown_request_or_status_line();
-        }
-
-        serialization::consume_whitespaces(is);
-        serialization::consume(is, '\r');
-        serialization::consume(is, '\n');
-    }
-
-    while (is.peek() != std::char_traits<char>::eof()) {
-        // read header
-        const auto name = serialization::read_until(is, ':');
-        serialization::consume(is, ':');
-        serialization::consume_whitespaces(is);
-
-        auto holder_opt = headers::_create_header(name);
-        if (holder_opt) {
-            auto holder = std::move(holder_opt.value());
-            holder->read(is);
-            add_header(name, std::move(holder));
-        } else {
-            auto holder = std::make_unique<headers::_header_holder<headers::generic_header>>();
-            holder->value.name = name;
-            holder->read(is);
-            add_header(name, std::move(holder));
-        }
-
-        serialization::consume_whitespaces(is);
-        serialization::consume(is, '\r');
-        serialization::consume(is, '\n');
-
-        if (is.peek() == '\r') {
-            serialization::consume(is, '\r');
-            serialization::consume(is, '\n');
-            break;
-        }
-    }
-
-    if (is.peek() != std::char_traits<char>::eof()) {
-        // read body
-        if (has_header<headers::content_type>()) {
-            const auto content_type_header = header<headers::content_type>();
-            const auto content_type = content_type_header.value;
-
-            auto body_opt = bodies::_create_body(content_type);
-            if (body_opt) {
-                auto body = std::move(body_opt.value());
-                body->operator>>(is);
-                set_body(std::move(body));
-            } else {
-                std::string body_data;
-                is >> body_data;
-
-                auto body = std::make_unique<bodies::generic_body>();
-                body->m_content_type = content_type;
-                body->m_data = body_data;
-                set_body(std::move(body));
-            }
-        } else {
-            std::string body_data;
-            is >> body_data;
-
-            auto body = std::make_unique<bodies::generic_body>();
-            body->m_data = body_data;
-            set_body(std::move(body));
-        }
-    }
-
-    return is;
-}
-
-std::ostream& message::operator<<(std::ostream& os) {
-    // dump request/status line
-    {
-        if (m_request_line) {
-            sip::write_header_request_line(os, m_request_line.value());
-        } else if (m_status_line) {
-            sip::write_header_status_line(os, m_status_line.value());
-        } else {
-            throw unknown_request_or_status_line();
-        }
-
-        os << "\r\n";
-    }
-
-    bool wrote_header = false;
-    // dump headers
-    for (auto& [name, holders] : m_headers) {
-        for (const auto& holder : holders) {
-            os << name << ": ";
-            holder->write(os);
-            os << "\r\n";
-            wrote_header = true;
-        }
-    }
-
-    // dump body
-    os << "\r\n";
-    if (!wrote_header) {
-        os << "\r\n";
-    }
-
-    if (m_body) {
-        m_body->operator<<(os);
-    }
-
-    return os;
 }
 
 void message::add_header(const std::string& name, std::unique_ptr<headers::_base_header_holder> holder) {
