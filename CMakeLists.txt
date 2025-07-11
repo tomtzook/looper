@@ -30,6 +30,9 @@ set(SOURCES
         include/looper_except.h
         include/looper_tcp.h
         include/looper_udp.h
+        include/sip/base.h
+        include/sip/bodies.h
+        include/sip/message.h
 
         src/util/util.h
         src/util/handles.h
@@ -40,10 +43,12 @@ set(SOURCES
         src/loop/loop.h
         src/types_internal.h
         src/looper_base.h
+        include/looper_meta.h
 
         src/looper.cpp
         src/looper_tcp.cpp
         src/looper_udp.cpp
+        src/looper_sip.cpp
         src/trace.cpp
         src/loop/loop.cpp
         src/loop/loop_base.cpp
@@ -56,6 +61,9 @@ set(SOURCES
         src/loop/loop_timer.cpp
         src/loop/loop_future.h
         src/loop/loop_future.cpp
+        src/sip/serialization.cpp
+        src/sip/base.cpp
+        src/sip/message.cpp
 )
 
 if (UNIX)
