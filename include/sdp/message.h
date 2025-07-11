@@ -34,6 +34,8 @@ void register_attribute() {
 class message {
 public:
     message() = default;
+    message(const message&) = delete;
+    message(message&&) = default;
     ~message() = default;
 
     template<fields::_field_type T>

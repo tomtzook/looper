@@ -49,6 +49,10 @@ public:
 
 class sdp_body final : public body {
 public:
+    sdp_body() = default;
+    sdp_body(const sdp_body&) = delete;
+    sdp_body(sdp_body&&) = default;
+
     [[nodiscard]] std::string content_type() const override;
 
     std::istream& operator>>(std::istream& is) override;

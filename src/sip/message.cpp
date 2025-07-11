@@ -230,7 +230,6 @@ ssize_t write_message(const std::span<uint8_t> buffer, const message& msg) {
     write_headers(os, msg);
     write_body(os, msg);
 
-    std::cout << os.bad() << ", " << os.rdstate() << std::endl;
     return os.tellp();
 }
 

@@ -93,6 +93,8 @@ std::ostream& operator<<(std::ostream& os, const message& msg);
 class message {
 public:
     message() = default;
+    message(const message&) = delete;
+    message(message&&) = default;
     ~message() = default;
 
     [[nodiscard]] bool is_request() const;
@@ -114,9 +116,9 @@ public:
 
     [[nodiscard]] bool has_body() const;
     template<bodies::_body_type T>
-    T body() const;
+    const T& body() const;
     template<bodies::_body_type T>
-    void set_body(const T& body);
+    void set_body(T&& body);
 
 private:
     void add_header(const std::string& name, std::unique_ptr<headers::_base_header_holder> holder);
@@ -195,7 +197,7 @@ void message::add_header(const T& header) {
 }
 
 template<bodies::_body_type T>
-T message::body() const {
+const T& message::body() const {
     if (!m_body) {
         throw bodies::has_no_body();
     }
@@ -205,9 +207,10 @@ T message::body() const {
 }
 
 template<bodies::_body_type T>
-void message::set_body(const T& body) {
+void message::set_body(T&& body) {
     const auto content_type = body.content_type();
-    set_body(std::make_unique<T>(body));
+    auto ptr = std::make_unique<T>(std::forward<T>(body));
+    set_body(std::move(ptr));
 
     headers::content_type content_type_header;
     content_type_header.value = content_type;
