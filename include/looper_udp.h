@@ -12,6 +12,6 @@ void bind_udp(udp udp, uint16_t port);
 
 void start_udp_read(udp udp, udp_read_callback&& callback);
 void stop_udp_read(udp udp);
-void write_udp(udp udp, inet_address destination, std::span<const uint8_t> buffer, udp_callback&& callback);
+void write_udp(udp udp, inet_address_view destination, std::span<const uint8_t> buffer, udp_callback&& callback);
 
 }

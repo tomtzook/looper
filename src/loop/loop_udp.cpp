@@ -129,7 +129,7 @@ void udp::handle_read(std::unique_lock<std::mutex>& lock) {
     }
 
     invoke_func<>(lock, "udp_loop_callback", m_read_callback,
-        m_context->handle, m_handle, inet_address{std::string_view(ip_buff), port}, data, error);
+        m_context->handle, m_handle, inet_address_view{std::string_view(ip_buff), port}, data, error);
 }
 
 void udp::handle_write(std::unique_lock<std::mutex>& lock) {

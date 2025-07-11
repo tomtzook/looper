@@ -35,7 +35,7 @@ tcp_transport::tcp_transport(impl::loop_context* context, std::shared_ptr<impl::
     , m_tcp(std::move(tcp))
 {}
 
-void tcp_transport::open(const inet_address local, const inet_address remote) {
+void tcp_transport::open(const inet_address_view local, const inet_address_view remote) {
     m_tcp = std::make_unique<impl::tcp>(0, m_context);
     m_tcp->bind(local.ip, local.port);
     m_tcp->connect(remote.ip, remote.port, [this](looper::loop, looper::tcp, const looper::error error)->void {
@@ -70,6 +70,53 @@ void tcp_transport::close() {
     }
 }
 
+udp_transport::udp_transport(impl::loop_context* context)
+    : transport(context)
+    , m_udp()
+    , m_remote()
+{}
+
+udp_transport::udp_transport(impl::loop_context* context, std::shared_ptr<impl::udp> udp)
+    : transport(context)
+    , m_udp(std::move(udp))
+    , m_remote()
+{}
+
+void udp_transport::open(const inet_address_view local, const inet_address_view remote) {
+    m_udp->bind(local.ip, local.port);
+    m_remote = remote;
+
+    m_connect_listener(error_success);
+}
+
+void udp_transport::start_reading() {
+    m_udp->start_read([this](looper::loop, looper::handle, const inet_address_view& sender, const std::span<const uint8_t> data, const looper::error error)->void {
+        m_data_listener(data, error);
+    });
+}
+
+void udp_transport::send(const std::span<const uint8_t> data) {
+    impl::udp::write_request request;
+    const auto buffer_size = data.size_bytes();
+    request.buffer = std::unique_ptr<uint8_t[]>(new uint8_t[buffer_size]);
+    request.pos = 0;
+    request.size = buffer_size;
+    request.write_callback = [this](looper::loop, looper::tcp, const looper::error error)->void {
+        m_write_callback(error);
+    };
+    request.destination = m_remote;
+    memcpy(request.buffer.get(), data.data(), buffer_size);
+
+    m_udp->write(std::move(request));
+}
+
+void udp_transport::close() {
+    if (m_udp) {
+        m_udp->close();
+        m_udp.reset();
+    }
+}
+
 session::session(const sip_session handle, impl::loop_context* context, const looper::sip::transport transport_type)
     : m_handle(handle)
     , m_context(context)
@@ -85,6 +132,9 @@ session::session(const sip_session handle, impl::loop_context* context, const lo
     switch (transport_type) {
         case looper::sip::transport::tcp:
             m_transport = std::make_unique<tcp_transport>(context);
+            break;
+        case looper::sip::transport::udp:
+            m_transport = std::make_unique<udp_transport>(context);
             break;
         default:
             throw std::runtime_error("unknown sip transport");
@@ -125,13 +175,29 @@ session::session(const sip_session handle, impl::loop_context* context, std::sha
     }
 }
 
+session::session(const sip_session handle, impl::loop_context* context, std::shared_ptr<impl::udp> udp)
+    : m_handle(handle)
+    , m_context(context)
+    , m_mutex()
+    , m_transport()
+    , m_state(state::ready)
+    , m_connect_callback()
+    , m_request_callback()
+    , m_listeners()
+    , m_read_buffer()
+    , m_in_messages()
+    , m_write_buffer() {
+    m_transport = std::make_unique<udp_transport>(context, std::move(udp));
+    setup_transport_listeners();
+}
+
 void session::listen(const looper::sip::method method, looper::sip::sip_request_callback&& callback) {
     std::unique_lock lock(m_mutex);
 
     m_listeners[method] = std::move(callback);
 }
 
-void session::open(inet_address local_address, inet_address remote_address, looper::sip::sip_callback&& callback) {
+void session::open(inet_address_view local_address, inet_address_view remote_address, looper::sip::sip_callback&& callback) {
     std::unique_lock lock(m_mutex);
 
     if (m_state != state::ready) {
@@ -224,7 +290,10 @@ void session::setup_transport_listeners() {
             m_transport.reset();
 
             if (was_in_transaction) {
-                // todo: handle
+                const looper::sip::message* message = nullptr;
+                invoke_func<>(lock, "sip_transaction_callback", m_request_callback, m_context->handle, m_handle, message, error);
+            } else {
+                looper_trace_error(log_module, "session=%lu received error for writing when not in transaction", m_handle);
             }
         }
     });
@@ -239,12 +308,12 @@ void session::process_data(std::unique_lock<std::mutex>& lock) {
             if (in_transaction) {
                 if (message->is_request()) {
                     // we should receive a response, not request
-                    looper_trace_debug(log_module, "session=%lu received a request while in transaction", m_handle);
+                    looper_trace_error(log_module, "session=%lu received a request while in transaction", m_handle);
+                } else {
+                    m_state = state::open;
+                    const looper::sip::message* msg = message.get();
+                    invoke_func<>(lock, "sip_transaction_callback", m_request_callback, m_context->handle, m_handle, msg, 0);
                 }
-
-                m_state = state::open;
-                const looper::sip::message* msg = message.get();
-                invoke_func<>(lock, "sip_transaction_callback", m_request_callback, m_context->handle, m_handle, msg, 0);
             } else {
                 delegate_to_listeners(lock, message.get());
             }
@@ -295,10 +364,10 @@ void session::delegate_to_listeners(std::unique_lock<std::mutex>& lock, const lo
         if (it != m_listeners.end()) {
             invoke_func<>(lock, "sip_message_callback", it->second, m_context->handle, m_handle, message, 0);
         } else {
-            // todo: handle
+            looper_trace_error(log_module, "session=%lu received a request, but no listener for it", m_handle);
         }
     } else {
-        // todo: handle
+        looper_trace_error(log_module, "session=%lu received a response while not in transaction", m_handle);
     }
 }
 

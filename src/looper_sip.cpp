@@ -31,6 +31,19 @@ sip_session create_sip_tcp(const loop loop, const tcp tcp) {
     return handle;
 }
 
+sip_session create_sip_udp(const loop loop, const udp udp) {
+    std::unique_lock lock(get_global_loop_data().m_mutex);
+
+    auto& data = get_loop(loop);
+    auto udp_impl = data.m_udps.share(udp);
+
+    auto [handle, sip_impl] = data.m_sip_sessions.allocate_new(data.m_context, udp_impl);
+    looper_trace_info(log_module, "created new sip session: loop=%lu, handle=%lu", data.m_handle, handle);
+    data.m_sip_sessions.assign(handle, std::move(sip_impl));
+
+    return handle;
+}
+
 void destroy_sip(const sip_session sip) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
@@ -42,7 +55,7 @@ void destroy_sip(const sip_session sip) {
     sip_impl->close();
 }
 
-void open(const sip_session sip, inet_address local_address, inet_address remote_address, sip_callback&& callback) {
+void open(const sip_session sip, inet_address_view local_address, inet_address_view remote_address, sip_callback&& callback) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(sip);
@@ -53,7 +66,7 @@ void open(const sip_session sip, inet_address local_address, inet_address remote
     sip_impl.open(std::move(local_address), std::move(remote_address), std::move(callback));
 }
 
-void listen(const sip_session sip, sip::method method, sip_request_callback&& callback) {
+void listen_for_requests(const sip_session sip, sip::method method, sip_request_callback&& callback) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(sip);

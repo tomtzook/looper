@@ -23,7 +23,7 @@ public:
     void on_new_data(data_listener&& listener);
     void on_write_complete(write_callback&& listener);
 
-    virtual void open(inet_address local, inet_address remote) = 0;
+    virtual void open(inet_address_view local, inet_address_view remote) = 0;
     virtual void start_reading() = 0;
     virtual void send(std::span<const uint8_t> data) = 0;
     virtual void close() = 0;
@@ -40,13 +40,28 @@ public:
     explicit tcp_transport(impl::loop_context* context);
     tcp_transport(impl::loop_context* context, std::shared_ptr<impl::tcp> tcp);
 
-    void open(inet_address local, inet_address remote) override;
+    void open(inet_address_view local, inet_address_view remote) override;
     void start_reading() override;
     void send(std::span<const uint8_t> data) override;
     void close() override;
 
 private:
     std::shared_ptr<tcp> m_tcp;
+};
+
+class udp_transport final : public transport {
+public:
+    explicit udp_transport(impl::loop_context* context);
+    udp_transport(impl::loop_context* context, std::shared_ptr<impl::udp> udp);
+
+    void open(inet_address_view local, inet_address_view remote) override;
+    void start_reading() override;
+    void send(std::span<const uint8_t> data) override;
+    void close() override;
+
+private:
+    std::shared_ptr<udp> m_udp;
+    inet_address m_remote;
 };
 
 class session {
@@ -61,10 +76,11 @@ public:
 
     session(sip_session handle, impl::loop_context* context, looper::sip::transport transport_type);
     session(sip_session handle, impl::loop_context* context, std::shared_ptr<impl::tcp> tcp);
+    session(sip_session handle, impl::loop_context* context, std::shared_ptr<impl::udp> udp);
 
     void listen(looper::sip::method method, looper::sip::sip_request_callback&& callback);
 
-    void open(inet_address local_address, inet_address remote_address, looper::sip::sip_callback&& callback);
+    void open(inet_address_view local_address, inet_address_view remote_address, looper::sip::sip_callback&& callback);
     void request(looper::sip::message&& message, looper::sip::sip_request_callback&& callback);
     void send(looper::sip::message&& message);
     void close();

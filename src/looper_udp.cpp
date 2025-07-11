@@ -61,7 +61,7 @@ void stop_udp_read(const udp udp) {
     udp_impl.stop_read();
 }
 
-void write_udp(const udp udp, inet_address destination, const std::span<const uint8_t> buffer, udp_callback&& callback) {
+void write_udp(const udp udp, inet_address_view destination, const std::span<const uint8_t> buffer, udp_callback&& callback) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(udp);
@@ -72,7 +72,7 @@ void write_udp(const udp udp, inet_address destination, const std::span<const ui
 
     const auto buffer_size = buffer.size_bytes();
     impl::udp::write_request request;
-    request.destination = std::move(destination);
+    request.destination = destination;
     request.buffer = std::unique_ptr<uint8_t[]>(new uint8_t[buffer_size]);
     request.size = buffer_size;
     request.write_callback = std::move(callback);

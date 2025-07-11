@@ -24,9 +24,20 @@ using tcp_server = handle;
 using udp = handle;
 using sip_session = handle;
 
-struct inet_address {
+struct inet_address_view {
     std::string_view ip;
     uint16_t port;
+};
+
+struct inet_address {
+    std::string ip;
+    uint16_t port;
+
+    inet_address& operator=(const inet_address_view &view) {
+        this->ip = std::string(view.ip);
+        this->port = view.port;
+        return *this;
+    }
 };
 
 using loop_callback = std::function<void(loop)>;
@@ -38,7 +49,7 @@ using write_callback = std::function<void(loop, handle, error)>;
 using tcp_callback = std::function<void(loop, tcp, error)>;
 using tcp_server_callback = std::function<void(loop, tcp_server)>;
 using udp_callback = std::function<void(loop, udp, error)>;
-using udp_read_callback = std::function<void(loop, udp, inet_address, std::span<const uint8_t>, error)>;
+using udp_read_callback = std::function<void(loop, udp, inet_address_view, std::span<const uint8_t>, error)>;
 
 enum : error {
     error_success = 0,
