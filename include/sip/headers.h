@@ -243,13 +243,13 @@ DEFINE_SIP_HEADER_READ(contact) {
     is >> h.address.port;
 
     if (serialization::try_consume(is, ';')) {
-        h.internal_tags = serialization::read_list(is, ';', '>');
+        h.internal_tags = serialization::read_tags(is, ';', '>');
     }
 
     serialization::consume(is, '>');
 
     if (serialization::try_consume(is, ';')) {
-        h.external_tags = serialization::read_list(is, ';', '\r');
+        h.external_tags = serialization::read_tags(is, ';', '\r');
     }
 }
 
@@ -261,14 +261,14 @@ DEFINE_SIP_HEADER_WRITE(contact) {
 
     if (!h.internal_tags.empty()) {
         os << ';';
-        serialization::write_list(os, h.internal_tags, ';');
+        serialization::write_tags(os, h.internal_tags, ';');
     }
 
     os << '>';
 
     if (!h.external_tags.empty()) {
         os << ';';
-        serialization::write_list(os, h.external_tags, ';');
+        serialization::write_tags(os, h.external_tags, ';');
     }
 }
 
@@ -289,7 +289,7 @@ DEFINE_SIP_HEADER_READ(via) {
     is >> h.address.port;
 
     if (serialization::try_consume(is, ';')) {
-        h.tags = serialization::read_list(is, ';', '\r');
+        h.tags = serialization::read_tags(is, ';', '\r');
     }
 }
 
@@ -304,7 +304,7 @@ DEFINE_SIP_HEADER_WRITE(via) {
 
     if (!h.tags.empty()) {
         os << ';';
-        serialization::write_list(os, h.tags, ';');
+        serialization::write_tags(os, h.tags, ';');
     }
 }
 
@@ -329,7 +329,7 @@ DEFINE_SIP_HEADER_READ(record_route) {
         is >> port;
         h.port = port;
     } else if (serialization::try_consume(is, ';')) {
-        h.tags = serialization::read_list(is, ';', '>');
+        h.tags = serialization::read_tags(is, ';', '>');
     }
 
     serialization::consume(is, '>');
@@ -348,7 +348,7 @@ DEFINE_SIP_HEADER_WRITE(record_route) {
 
     if (!h.tags.empty()) {
         os << ';';
-        serialization::write_list(os, h.tags, ';');
+        serialization::write_tags(os, h.tags, ';');
     }
 
     os << '>';

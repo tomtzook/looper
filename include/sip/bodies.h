@@ -3,6 +3,7 @@
 #include <exception>
 #include <iostream>
 
+#include <sdp/message.h>
 
 namespace looper::sip::bodies {
 
@@ -12,23 +13,10 @@ class body {
 public:
     virtual ~body() = default;
 
-    virtual std::string content_type() const = 0;
+    [[nodiscard]] virtual std::string content_type() const = 0;
 
     virtual std::istream& operator>>(std::istream& is) = 0;
     virtual std::ostream& operator<<(std::ostream& os) = 0;
-};
-
-class generic_body final : public body {
-public:
-    generic_body();
-
-    std::string content_type() const override;
-
-    std::istream& operator>>(std::istream& is) override;
-    std::ostream& operator<<(std::ostream& os) override;
-
-    std::optional<std::string> m_content_type;
-    std::string m_data;
 };
 
 template<typename T>
@@ -44,6 +32,29 @@ struct _body_creator final : _base_body_creator {
     std::unique_ptr<body> create() override {
         return std::make_unique<T>();
     }
+};
+
+class generic_body final : public body {
+public:
+    generic_body();
+
+    [[nodiscard]] std::string content_type() const override;
+
+    std::istream& operator>>(std::istream& is) override;
+    std::ostream& operator<<(std::ostream& os) override;
+
+    std::optional<std::string> m_content_type;
+    std::string m_data;
+};
+
+class sdp_body final : public body {
+public:
+    [[nodiscard]] std::string content_type() const override;
+
+    std::istream& operator>>(std::istream& is) override;
+    std::ostream& operator<<(std::ostream& os) override;
+
+    sdp::message m_message;
 };
 
 }

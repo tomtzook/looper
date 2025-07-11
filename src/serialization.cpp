@@ -3,7 +3,7 @@
 
 #include <looper_sip.h>
 
-namespace looper::sip::serialization {
+namespace looper::serialization {
 
 class no_regex_match final : public std::exception {
 };
@@ -74,7 +74,7 @@ void consume(std::istream& is, const char* str) {
     }
 }
 
-tag_map read_list(std::istream& is, const char sep, const char end_ch) {
+tag_map read_tags(std::istream& is, const char sep, const char end_ch) {
     tag_map map;
 
     while (true) {
@@ -99,7 +99,7 @@ tag_map read_list(std::istream& is, const char sep, const char end_ch) {
     return map;
 }
 
-void write_list(std::ostream& os, const tag_map& map, const char sep) {
+void write_tags(std::ostream& os, const tag_map& map, const char sep) {
     for (auto& [key, value] : map) {
         os << key;
         os << sep;

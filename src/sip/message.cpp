@@ -1,27 +1,14 @@
 
 #include <looper_sip.h>
+#include "util/streams.h"
 
 namespace looper::sip {
 
 namespace headers {
 
-class unknown_header final : public std::exception {
-};
-
 static std::unordered_map<std::string, std::unique_ptr<_base_header_holder_creator>>& _get_holders() {
     static std::unordered_map<std::string, std::unique_ptr<_base_header_holder_creator>> _header_creators;
     return _header_creators;
-}
-
-void __attribute__((constructor)) register_known_headers() {
-    register_header<cseq>();
-    register_header<from>();
-    register_header<to>();
-    register_header<call_id>();
-    register_header<content_length>();
-    register_header<content_type>();
-    register_header<max_forwards>();
-    register_header<expires>();
 }
 
 void _register_header_internal(const std::string& name, std::unique_ptr<_base_header_holder_creator> ptr) {
@@ -64,6 +51,19 @@ std::optional<std::unique_ptr<body>> _create_body(const std::string& content_typ
 
 }
 
+void __attribute__((constructor)) register_known_types() {
+    headers::register_header<headers::cseq>();
+    headers::register_header<headers::from>();
+    headers::register_header<headers::to>();
+    headers::register_header<headers::call_id>();
+    headers::register_header<headers::content_length>();
+    headers::register_header<headers::content_type>();
+    headers::register_header<headers::max_forwards>();
+    headers::register_header<headers::expires>();
+
+    bodies::register_body<bodies::sdp_body>();
+}
+
 class unknown_request_or_status_line final : public std::exception {
 };
 
@@ -71,49 +71,6 @@ class not_a_request final : public std::exception {
 };
 
 class not_a_response final : public std::exception {
-};
-
-class istream_buff final : public std::streambuf {
-public:
-    explicit istream_buff(const std::span<const uint8_t> buffer) {
-        auto* ptr = const_cast<char*>(reinterpret_cast<const char*>(buffer.data()));
-        setg(ptr, ptr, ptr + buffer.size());
-    }
-
-    pos_type seekoff(const off_type off, const std::ios_base::seekdir dir, std::ios_base::openmode) override {
-        if (dir == std::ios_base::cur) {
-            gbump(static_cast<int>(off));
-        } else if (dir == std::ios_base::end) {
-            setg(eback(), egptr() + off, egptr());
-        } else if (dir == std::ios_base::beg) {
-            setg(eback(), eback() + off, egptr());
-        }
-
-        return gptr() - eback();
-    }
-
-    pos_type seekpos(const pos_type pos, std::ios_base::openmode) override {
-        setg(eback(), eback() + pos, egptr());
-        return gptr() - eback();
-    }
-};
-
-class ostream_buff final : public std::streambuf {
-public:
-    explicit ostream_buff(const std::span<uint8_t> buffer) {
-        auto* ptr = reinterpret_cast<char*>(buffer.data());
-        setp(ptr, ptr + buffer.size());
-    }
-
-    pos_type seekoff(const off_type off, const std::ios_base::seekdir dir, std::ios_base::openmode) override {
-        if (dir == std::ios_base::cur) {
-            pbump(static_cast<int>(off));
-        } else {
-            return pos_type(-1);
-        }
-
-        return pptr() - pbase();
-    }
 };
 
 void read_headers(std::istream& is, message& msg) {
@@ -143,7 +100,7 @@ void read_headers(std::istream& is, message& msg) {
         serialization::consume(is, '\n');
     }
 
-    while (is.peek() != std::char_traits<char>::eof()) {
+    while (is.peek() != is.eof()) {
         // read header
         const auto name = serialization::read_until(is, ':');
         serialization::consume(is, ':');
@@ -174,7 +131,7 @@ void read_headers(std::istream& is, message& msg) {
 }
 
 void read_body(std::istream& is, message& msg) {
-    if (is.peek() != std::char_traits<char>::eof()) {
+    if (is.peek() != is.eof()) {
         // read body
         if (msg.has_header<headers::content_type>()) {
             const auto content_type_header = msg.header<headers::content_type>();
@@ -206,7 +163,7 @@ void read_body(std::istream& is, message& msg) {
 }
 
 ssize_t read_message(const std::span<const uint8_t> buffer, message& msg) {
-    istream_buff buf(buffer);
+    util::istream_buff buf(buffer);
     std::istream is(&buf);
     read_headers(is, msg);
 
@@ -267,7 +224,7 @@ void write_body(std::ostream& os, const message& msg) {
 }
 
 ssize_t write_message(const std::span<uint8_t> buffer, const message& msg) {
-    ostream_buff buf(buffer);
+    util::ostream_buff buf(buffer);
     std::ostream os(&buf);
 
     write_headers(os, msg);

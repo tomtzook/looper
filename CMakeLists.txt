@@ -33,6 +33,11 @@ set(SOURCES
         include/sip/base.h
         include/sip/bodies.h
         include/sip/message.h
+        include/util/serialize.h
+        include/sdp/fields.h
+        include/sdp/base.h
+        include/sdp/attributes.h
+        include/sdp/message.h
 
         src/util/util.h
         src/util/handles.h
@@ -50,6 +55,7 @@ set(SOURCES
         src/looper_udp.cpp
         src/looper_sip.cpp
         src/trace.cpp
+        src/serialization.cpp
         src/loop/loop.cpp
         src/loop/loop_base.cpp
         src/loop/loop_tcp.cpp
@@ -61,11 +67,12 @@ set(SOURCES
         src/loop/loop_timer.cpp
         src/loop/loop_future.h
         src/loop/loop_future.cpp
-        src/sip/serialization.cpp
         src/sip/base.cpp
         src/sip/message.cpp
         src/sip/session.cpp
         src/util/buffer.cpp
+        src/sdp/base.cpp
+        src/sdp/message.cpp
 )
 
 if (UNIX)

@@ -371,6 +371,17 @@ std::ostream& generic_body::operator<<(std::ostream& os) {
     return os;
 }
 
+std::string sdp_body::content_type() const {
+    return "application/sdp";
+}
+
+std::istream& sdp_body::operator>>(std::istream& is) {
+    return m_message.operator>>(is);
+}
+std::ostream& sdp_body::operator<<(std::ostream& os) {
+    return m_message.operator<<(os);
+}
+
 }
 
 }
