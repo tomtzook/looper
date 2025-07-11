@@ -27,6 +27,12 @@ void transport::on_write_complete(write_callback&& listener) {
 
 tcp_transport::tcp_transport(impl::loop_context* context)
     : transport(context)
+    , m_tcp()
+{}
+
+tcp_transport::tcp_transport(impl::loop_context* context, std::shared_ptr<impl::tcp> tcp)
+    : transport(context)
+    , m_tcp(std::move(tcp))
 {}
 
 void tcp_transport::open(const inet_address local, const inet_address remote) {
@@ -80,57 +86,43 @@ session::session(const sip_session handle, impl::loop_context* context, const lo
         case looper::sip::transport::tcp:
             m_transport = std::make_unique<tcp_transport>(context);
             break;
-        case looper::sip::transport::udp:
-            break;
         default:
             throw std::runtime_error("unknown sip transport");
     }
-    m_transport->on_connect([this](const looper::error error)->void {
-        std::unique_lock lock(m_mutex);
+    setup_transport_listeners();
+}
 
-        if (error == error_success) {
+session::session(const sip_session handle, impl::loop_context* context, std::shared_ptr<impl::tcp> tcp)
+    : m_handle(handle)
+    , m_context(context)
+    , m_mutex()
+    , m_transport()
+    , m_state(state::ready)
+    , m_connect_callback()
+    , m_request_callback()
+    , m_listeners()
+    , m_read_buffer()
+    , m_in_messages()
+    , m_write_buffer() {
+    switch (tcp->get_state()) {
+        case tcp::state::open:
+            m_state = state::ready;
+            break;
+        case tcp::state::connected:
             m_state = state::open;
-            m_transport->start_reading();
-        } else {
-            m_state = state::errored;
-            m_transport.reset();
-        }
+            break;
+        case tcp::state::connecting:
+        case tcp::state::closed:
+        default:
+            throw std::runtime_error("tcp in bad state");
+    }
 
-        if (m_connect_callback != nullptr) {
-            invoke_func(lock, "sip_connect_callback", m_connect_callback, m_context->handle, m_handle, error);
-            m_connect_callback = nullptr;
-        }
-    });
-    m_transport->on_new_data([this](const std::span<const uint8_t> data, const looper::error error)->void {
-        std::unique_lock lock(m_mutex);
+    m_transport = std::make_unique<tcp_transport>(context, std::move(tcp));
+    setup_transport_listeners();
 
-        if (error == error_success) {
-            m_read_buffer.write(data);
-            process_data(lock);
-        } else {
-            const auto was_in_transaction = m_state == state::in_transaction;
-            m_state = state::errored;
-            m_transport.reset();
-
-            if (was_in_transaction) {
-                const looper::sip::message* message = nullptr;
-                invoke_func<>(lock, "sip_transaction_callback", m_request_callback, m_context->handle, m_handle, message, error);
-            }
-        }
-    });
-    m_transport->on_write_complete([this](const looper::error error)->void {
-        std::unique_lock lock(m_mutex);
-
-        if (error != error_success) {
-            const auto was_in_transaction = m_state == state::in_transaction;
-            m_state = state::errored;
-            m_transport.reset();
-
-            if (was_in_transaction) {
-                // todo: handle
-            }
-        }
-    });
+    if (m_state == state::open) {
+        m_transport->start_reading();
+    }
 }
 
 void session::listen(const looper::sip::method method, looper::sip::sip_request_callback&& callback) {
@@ -187,6 +179,55 @@ void session::close() {
 
     m_transport->close();
     m_transport.reset();
+}
+
+void session::setup_transport_listeners() {
+    m_transport->on_connect([this](const looper::error error)->void {
+        std::unique_lock lock(m_mutex);
+
+        if (error == error_success) {
+            m_state = state::open;
+            m_transport->start_reading();
+        } else {
+            m_state = state::errored;
+            m_transport.reset();
+        }
+
+        if (m_connect_callback != nullptr) {
+            invoke_func(lock, "sip_connect_callback", m_connect_callback, m_context->handle, m_handle, error);
+            m_connect_callback = nullptr;
+        }
+    });
+    m_transport->on_new_data([this](const std::span<const uint8_t> data, const looper::error error)->void {
+        std::unique_lock lock(m_mutex);
+
+        if (error == error_success) {
+            m_read_buffer.write(data);
+            process_data(lock);
+        } else {
+            const auto was_in_transaction = m_state == state::in_transaction;
+            m_state = state::errored;
+            m_transport.reset();
+
+            if (was_in_transaction) {
+                const looper::sip::message* message = nullptr;
+                invoke_func<>(lock, "sip_transaction_callback", m_request_callback, m_context->handle, m_handle, message, error);
+            }
+        }
+    });
+    m_transport->on_write_complete([this](const looper::error error)->void {
+        std::unique_lock lock(m_mutex);
+
+        if (error != error_success) {
+            const auto was_in_transaction = m_state == state::in_transaction;
+            m_state = state::errored;
+            m_transport.reset();
+
+            if (was_in_transaction) {
+                // todo: handle
+            }
+        }
+    });
 }
 
 void session::process_data(std::unique_lock<std::mutex>& lock) {

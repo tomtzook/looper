@@ -23,6 +23,10 @@ tcp::tcp(const looper::tcp handle, loop_context *context, os::tcp_ptr&& socket)
     set_write_enabled(true);
 }
 
+tcp::state tcp::get_state() const {
+    return m_state;
+}
+
 void tcp::bind(const uint16_t port) {
     std::unique_lock lock(m_context->mutex);
 

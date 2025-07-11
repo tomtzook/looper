@@ -93,7 +93,7 @@ public:
         using pointer           = value_type*;
         using reference         = value_type&;
 
-        iterator(handle_table& table, std::unique_ptr<value_type>* ptr, size_t index)
+        iterator(handle_table& table, std::shared_ptr<value_type>* ptr, size_t index)
             : m_table(table)
             , m_ptr(ptr)
             , m_index(index) {
@@ -135,11 +135,11 @@ public:
         }
 
         handle_table& m_table;
-        std::unique_ptr<value_type>* m_ptr;
+        std::shared_ptr<value_type>* m_ptr;
         size_t m_index;
     };
 
-    handle_table(uint8_t parent, uint8_t type)
+    handle_table(const uint8_t parent, const uint8_t type)
         : m_parent(parent)
         , m_type(type)
         , m_data()
@@ -150,12 +150,12 @@ public:
         return m_count < 1;
     }
 
-    [[nodiscard]] bool has(handle_raw handle_raw) const {
+    [[nodiscard]] bool has(const handle_raw handle_raw) const {
         if (handle_raw == empty_handle) {
             return false;
         }
 
-        handles::handle handle(handle_raw);
+        const handles::handle handle(handle_raw);
         if (handle.parent() != m_parent || handle.type() != m_type || handle.index() >= capacity) {
             return false;
         }
@@ -174,15 +174,22 @@ public:
         return *m_data[index].get();
     }
 
-    type_& operator[](handle_raw handle_raw) {
+    type_& operator[](const handle_raw handle_raw) {
         const auto handle = verify_handle(handle_raw);
 
         const auto index = handle.index();
         return *m_data[index].get();
     }
 
+    std::shared_ptr<type_> share(const handle_raw handle_raw) {
+        const auto handle = verify_handle(handle_raw);
+
+        const auto index = handle.index();
+        return m_data[index];
+    }
+
     template<typename... arg_>
-    std::pair<handle_raw, std::unique_ptr<type_>> allocate_new(arg_&&... args) {
+    std::pair<handle_raw, std::shared_ptr<type_>> allocate_new(arg_&&... args) {
         const auto spot = find_next_available_spot();
         if (spot < 0) {
             throw no_space_exception();
@@ -202,7 +209,7 @@ public:
         return assign(handle, std::move(data));
     }
 
-    handle_raw reserve() const {
+    [[nodiscard]] handle_raw reserve() const {
         const auto spot = find_next_available_spot();
         if (spot < 0) {
             throw no_space_exception();
@@ -213,7 +220,7 @@ public:
         return  handle.raw();
     }
 
-    std::pair<handle_raw, type_&> assign(const handle_raw new_handle, std::unique_ptr<type_>&& ptr) {
+    std::pair<handle_raw, type_&> assign(const handle_raw new_handle, std::shared_ptr<type_>&& ptr) {
         const auto handle = valid_handle_for_us(new_handle);
         auto index = handle.index();
 
@@ -228,12 +235,12 @@ public:
         return {handle.raw(), reinterpret_cast<type_&>(*data)};
     }
 
-    std::unique_ptr<type_> release(handle_raw handle_raw) {
+    std::shared_ptr<type_> release(const handle_raw handle_raw) {
         const auto handle = verify_handle(handle_raw);
 
         const auto index = handle.index();
 
-        std::unique_ptr<type_> data;
+        std::shared_ptr<type_> data;
         m_data[index].swap(data);
         m_count--;
 
@@ -259,8 +266,8 @@ private:
         return -1;
     }
 
-    handles::handle verify_handle(handle_raw handle_raw) {
-        auto handle = valid_handle_for_us(handle_raw);
+    handles::handle verify_handle(const handle_raw handle_raw) {
+        const auto handle = valid_handle_for_us(handle_raw);
 
         if (!m_data[handle.index()]) {
             throw no_such_handle_exception(handle_raw);
@@ -269,8 +276,8 @@ private:
         return handle;
     }
 
-    handles::handle valid_handle_for_us(handle_raw handle_raw) {
-        handles::handle handle(handle_raw);
+    handles::handle valid_handle_for_us(const handle_raw handle_raw) {
+        const handles::handle handle(handle_raw);
 
         if (handle.parent() != m_parent || handle.type() != m_type || handle.index() >= capacity) {
             throw bad_handle_exception(handle_raw);
@@ -281,7 +288,7 @@ private:
 
     uint8_t m_parent;
     uint8_t m_type;
-    std::unique_ptr<type_> m_data[capacity];
+    std::shared_ptr<type_> m_data[capacity];
     size_t m_count;
 };
 

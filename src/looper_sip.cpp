@@ -18,21 +18,20 @@ sip_session create_sip(const loop loop, transport transport) {
     return handle;
 }
 
-sip_session create_sip_tcp(loop loop, tcp tcp) {
-    /*std::unique_lock lock(get_global_loop_data().m_mutex);
+sip_session create_sip_tcp(const loop loop, const tcp tcp) {
+    std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop(loop);
-    auto& tcp_impl = data.m_tcps[tcp];
+    auto tcp_impl = data.m_tcps.share(tcp);
 
     auto [handle, sip_impl] = data.m_sip_sessions.allocate_new(data.m_context, tcp_impl);
     looper_trace_info(log_module, "created new sip session: loop=%lu, handle=%lu", data.m_handle, handle);
     data.m_sip_sessions.assign(handle, std::move(sip_impl));
 
-    return handle;*/
-    return 0;// TODO: IMPL
+    return handle;
 }
 
-void destroy_sip(sip_session sip) {
+void destroy_sip(const sip_session sip) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(sip);

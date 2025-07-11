@@ -12,8 +12,7 @@ using sip_callback = std::function<void(loop, sip_session, error)>;
 using sip_request_callback = std::function<void(loop, sip_session, const sip::message*, error)>;
 
 enum class transport {
-    tcp,
-    udp
+    tcp
 };
 
 sip_session create_sip(loop loop, transport transport);

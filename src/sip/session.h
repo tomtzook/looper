@@ -38,6 +38,7 @@ protected:
 class tcp_transport final : public transport {
 public:
     explicit tcp_transport(impl::loop_context* context);
+    tcp_transport(impl::loop_context* context, std::shared_ptr<impl::tcp> tcp);
 
     void open(inet_address local, inet_address remote) override;
     void start_reading() override;
@@ -45,7 +46,7 @@ public:
     void close() override;
 
 private:
-    std::unique_ptr<tcp> m_tcp;
+    std::shared_ptr<tcp> m_tcp;
 };
 
 class session {
@@ -59,6 +60,7 @@ public:
     };
 
     session(sip_session handle, impl::loop_context* context, looper::sip::transport transport_type);
+    session(sip_session handle, impl::loop_context* context, std::shared_ptr<impl::tcp> tcp);
 
     void listen(looper::sip::method method, looper::sip::sip_request_callback&& callback);
 
@@ -68,6 +70,7 @@ public:
     void close();
 
 private:
+    void setup_transport_listeners();
     void process_data(std::unique_lock<std::mutex>& lock);
     bool read_messages();
     void delegate_to_listeners(std::unique_lock<std::mutex>& lock, const looper::sip::message* message);

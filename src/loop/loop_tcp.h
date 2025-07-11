@@ -17,6 +17,8 @@ public:
     tcp(looper::tcp handle, loop_context *context);
     tcp(looper::tcp handle, loop_context *context, os::tcp_ptr&& socket);
 
+    state get_state() const;
+
     void bind(uint16_t port);
     void bind(std::string_view address, uint16_t port);
     void connect(std::string_view address, uint16_t port, tcp_callback&& callback);
