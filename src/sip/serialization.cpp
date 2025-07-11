@@ -49,14 +49,62 @@ void consume_whitespaces(std::istream& is) {
     }
 }
 
-std::istream& consume(std::istream& is, const char ch) {
-    char cch;
-
-    if (!is.get(cch) || cch != ch) {
-        throw unexpected_character();
+bool try_consume(std::istream& is, const char ch) {
+    const auto peek = is.peek();
+    if (peek != ch) {
+        return false;
     }
 
-    return is;
+    char cch;
+    is.get(cch);
+
+    return true;
+}
+
+void consume(std::istream& is, const char ch) {
+    if (!try_consume(is, ch)) {
+        throw unexpected_character();
+    }
+}
+
+void consume(std::istream& is, const char* str) {
+    while (*str) {
+        consume(is, *str);
+        str++;
+    }
+}
+
+tag_map read_list(std::istream& is, const char sep, const char end_ch) {
+    tag_map map;
+
+    while (true) {
+        const auto name = read_until(is, '=');
+        consume(is, '=');
+        const auto value = read_until_or(is, sep, end_ch);
+        map[name] = value;
+
+        const auto peek = is.peek();
+        if (peek == sep) {
+            char cch;
+            if (!is.get(cch)) {
+                break;
+            }
+        } else if (peek == end_ch || peek == is.eof()) {
+            break;
+        } else {
+            throw unexpected_character();
+        }
+    }
+
+    return map;
+}
+
+void write_list(std::ostream& os, const tag_map& map, const char sep) {
+    for (auto& [key, value] : map) {
+        os << key;
+        os << sep;
+        os << value;
+    }
 }
 
 }

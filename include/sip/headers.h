@@ -230,3 +230,126 @@ DEFINE_SIP_HEADER_READ(expires) {
 DEFINE_SIP_HEADER_WRITE(expires) {
     os << h.value;
 }
+
+DECLARE_SIP_HEADER(contact, "Contact") {
+    inet_address address;
+    serialization::tag_map internal_tags;
+    serialization::tag_map external_tags;
+};
+
+DEFINE_SIP_HEADER_READ(contact) {
+    serialization::consume(is, "<sip:");
+    h.address.ip = serialization::read_until(is, ':');
+    is >> h.address.port;
+
+    if (serialization::try_consume(is, ';')) {
+        h.internal_tags = serialization::read_list(is, ';', '>');
+    }
+
+    serialization::consume(is, '>');
+
+    if (serialization::try_consume(is, ';')) {
+        h.external_tags = serialization::read_list(is, ';', '\r');
+    }
+}
+
+DEFINE_SIP_HEADER_WRITE(contact) {
+    os << "<sip:";
+    os << h.address.ip;
+    os << ':';
+    os << h.address.port;
+
+    if (!h.internal_tags.empty()) {
+        os << ';';
+        serialization::write_list(os, h.internal_tags, ';');
+    }
+
+    os << '>';
+
+    if (!h.external_tags.empty()) {
+        os << ';';
+        serialization::write_list(os, h.external_tags, ';');
+    }
+}
+
+DECLARE_SIP_HEADER(via, "Via") {
+    sip::version version;
+    sip::transport transport;
+    inet_address address;
+    serialization::tag_map tags;
+};
+
+DEFINE_SIP_HEADER_READ(via) {
+    is >> h.version;
+    serialization::consume(is, '/');
+    is >> h.transport;
+    serialization::consume_whitespaces(is);
+
+    h.address.ip = serialization::read_until(is, ':');
+    is >> h.address.port;
+
+    if (serialization::try_consume(is, ';')) {
+        h.tags = serialization::read_list(is, ';', '\r');
+    }
+}
+
+DEFINE_SIP_HEADER_WRITE(via) {
+    os << h.version;
+    os << '/';
+    os << h.transport;
+    os << ' ';
+    os << h.address.ip;
+    os << ':';
+    os << h.address.port;
+
+    if (!h.tags.empty()) {
+        os << ';';
+        serialization::write_list(os, h.tags, ';');
+    }
+}
+
+DECLARE_SIP_HEADER(record_route, "Record-Route") {
+    std::string user_info;
+    std::string ip;
+    std::optional<uint16_t> port;
+    serialization::tag_map tags;
+};
+
+DEFINE_SIP_HEADER_READ(record_route) {
+    serialization::consume(is, "<sip:");
+
+    h.user_info = serialization::read_until(is, '@');
+    serialization::consume(is, '@');
+
+    h.ip = serialization::read_until_or(is, ':', ';', '>');
+
+    h.port.reset();
+    if (serialization::try_consume(is, ':')) {
+        uint16_t port;
+        is >> port;
+        h.port = port;
+    } else if (serialization::try_consume(is, ';')) {
+        h.tags = serialization::read_list(is, ';', '>');
+    }
+
+    serialization::consume(is, '>');
+}
+
+DEFINE_SIP_HEADER_WRITE(record_route) {
+    os << "<sip:";
+    os << h.user_info;
+    os << '@';
+
+    os << h.ip;
+    if (h.port) {
+        os << ':';
+        os << h.port.value();
+    }
+
+    if (!h.tags.empty()) {
+        os << ';';
+        serialization::write_list(os, h.tags, ';');
+    }
+
+    os << '>';
+}

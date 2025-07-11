@@ -1,5 +1,6 @@
 
 #include <string>
+#include <cstring>
 
 #include <looper_sip.h>
 
@@ -319,6 +320,33 @@ std::ostream& operator<<(std::ostream& os, const version version) {
             throw unknown_version();
     }
 
+    return os;
+}
+
+std::istream& operator>>(std::istream& is, transport& transport) {
+    const auto name = serialization::read_until(is, ' ');
+    if (strcasecmp(name.c_str(), "tcp") == 0) {
+        transport = transport::tcp;
+    } else if (strcasecmp(name.c_str(), "udp") == 0) {
+        transport = transport::udp;
+    } else {
+        throw std::runtime_error("Invalid transport");
+    }
+
+    return is;
+}
+
+std::ostream& operator<<(std::ostream& os, const transport transport) {
+    switch (transport) {
+        case transport::tcp:
+            os << "TCP";
+            break;
+        case transport::udp:
+            os << "UDP";
+            break;
+        default:
+            throw std::runtime_error("Invalid transport");
+    }
     return os;
 }
 
