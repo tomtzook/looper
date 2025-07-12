@@ -5,6 +5,11 @@
 
 
 DECLARE_HEADER_NO_PARENT(request_line, "", looper::sip) {
+    request_line() = default;
+    request_line(const sip::method method, std::string uri, const sip::version version)
+        : method(method), uri(std::move(uri)), version(version)
+    {}
+
     sip::method method;
     std::string uri;
     sip::version version;
@@ -101,9 +106,11 @@ public:
 
     [[nodiscard]] sip::request_line request_line() const;
     void set_request_line(const sip::request_line& line);
+    void set_request_line(sip::request_line&& line);
 
     [[nodiscard]] sip::status_line status_line() const;
     void set_status_line(const sip::status_line& line);
+    void set_status_line(sip::status_line&& line);
 
     template<headers::_header_type T>
     [[nodiscard]] bool has_header() const;
@@ -113,6 +120,8 @@ public:
     std::vector<T> headers() const;
     template<headers::_header_type T>
     void add_header(const T& header);
+    template<headers::_header_type T>
+    void add_header(T&& header);
 
     [[nodiscard]] bool has_body() const;
     template<bodies::_body_type T>
@@ -188,10 +197,16 @@ std::vector<T> message::headers() const {
 
 template<headers::_header_type T>
 void message::add_header(const T& header) {
+    T header_copy = header;
+    add_header(std::move(header_copy));
+}
+
+template<headers::_header_type T>
+void message::add_header(T&& header) {
     const auto name = looper::meta::_header_name<T>::name();
 
     auto holder = std::make_unique<headers::_header_holder<T>>();
-    holder->value = header;
+    holder->value = std::forward<T>(header);
 
     add_header(name, std::move(holder));
 }

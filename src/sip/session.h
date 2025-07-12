@@ -78,7 +78,7 @@ public:
     session(sip_session handle, impl::loop_context* context, std::shared_ptr<impl::tcp> tcp);
     session(sip_session handle, impl::loop_context* context, std::shared_ptr<impl::udp> udp);
 
-    void listen(looper::sip::method method, looper::sip::sip_request_callback&& callback);
+    void listen(looper::sip::method method, looper::sip::sip_listen_callback&& callback);
 
     void open(inet_address_view local_address, inet_address_view remote_address, looper::sip::sip_callback&& callback);
     void request(looper::sip::message&& message, looper::sip::sip_request_callback&& callback);
@@ -100,7 +100,7 @@ private:
     state m_state;
     looper::sip::sip_callback m_connect_callback;
     looper::sip::sip_request_callback m_request_callback;
-    std::map<looper::sip::method, looper::sip::sip_request_callback> m_listeners;
+    std::map<looper::sip::method, looper::sip::sip_listen_callback> m_listeners;
 
     util::buffer m_read_buffer;
     std::deque<std::unique_ptr<looper::sip::message>> m_in_messages;

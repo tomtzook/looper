@@ -258,8 +258,13 @@ sip::request_line message::request_line() const {
 }
 
 void message::set_request_line(const sip::request_line& line) {
+    auto copy = line;
+    set_request_line(std::move(copy));
+}
+
+void message::set_request_line(sip::request_line&& line) {
     m_is_request = true;
-    m_request_line = line;
+    m_request_line = std::move(line);
     m_status_line = std::nullopt;
 }
 
@@ -272,8 +277,13 @@ sip::status_line message::status_line() const {
 }
 
 void message::set_status_line(const sip::status_line& line) {
+    auto copy = line;
+    set_status_line(std::move(copy));
+}
+
+void message::set_status_line(sip::status_line&& line) {
     m_is_request = false;
-    m_status_line = line;
+    m_status_line = std::move(line);
     m_request_line = std::nullopt;
 }
 

@@ -73,8 +73,8 @@ void buffer::truncate_to(const size_t pos) {
 
     std::memmove(m_data, m_data + pos, m_size - pos);
 
-    m_position -= pos;
     m_size -= pos;
+    m_position = m_size;
 }
 
 void buffer::write(const std::span<const uint8_t> span) {

@@ -66,7 +66,7 @@ void open(const sip_session sip, inet_address_view local_address, inet_address_v
     sip_impl.open(std::move(local_address), std::move(remote_address), std::move(callback));
 }
 
-void listen_for_requests(const sip_session sip, sip::method method, sip_request_callback&& callback) {
+void listen_for_requests(const sip_session sip, sip::method method, sip_listen_callback&& callback) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
     auto& data = get_loop_from_handle(sip);

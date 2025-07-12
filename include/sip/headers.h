@@ -67,6 +67,10 @@ DEFINE_SIP_HEADER_WRITE(generic_header) {
 }
 
 DECLARE_SIP_HEADER(cseq, "CSeq") {
+    cseq() = default;
+    cseq(const uint32_t seq_num, const sip::method method)
+        : seq_num(seq_num), method(method) {}
+
     uint32_t seq_num;
     sip::method method;
 };
@@ -84,6 +88,16 @@ DEFINE_SIP_HEADER_WRITE(cseq) {
 }
 
 DECLARE_SIP_HEADER(from, "From") {
+    from() = default;
+    explicit from(
+        const std::string_view uri,
+        std::optional<std::string_view> name = std::nullopt,
+        std::optional<std::string_view> tag = std::nullopt)
+        : uri(uri)
+        , name(name)
+        , tag(tag)
+    {}
+
     std::string uri;
     std::optional<std::string> name;
     std::optional<std::string> tag;
@@ -128,6 +142,16 @@ DEFINE_SIP_HEADER_WRITE(from) {
 }
 
 DECLARE_SIP_HEADER(to, "To") {
+    to() = default;
+    explicit to(
+        const std::string_view uri,
+        std::optional<std::string_view> name = std::nullopt,
+        std::optional<std::string_view> tag = std::nullopt)
+        : uri(uri)
+        , name(name)
+        , tag(tag)
+    {}
+
     std::string uri;
     std::optional<std::string> name;
     std::optional<std::string> tag;
@@ -172,6 +196,9 @@ DEFINE_SIP_HEADER_WRITE(to) {
 }
 
 DECLARE_SIP_HEADER(call_id, "Call-ID") {
+    call_id() = default;
+    explicit call_id(const std::string_view value) : value(value) {}
+
     std::string value;
 };
 
@@ -184,6 +211,9 @@ DEFINE_SIP_HEADER_WRITE(call_id) {
 }
 
 DECLARE_SIP_HEADER(content_length, "Content-Length") {
+    content_length() = default;
+    explicit content_length(const uint32_t value) : value(value) {}
+
     uint32_t value;
 };
 
@@ -196,6 +226,9 @@ DEFINE_SIP_HEADER_WRITE(content_length) {
 }
 
 DECLARE_SIP_HEADER(content_type, "Content-Type") {
+    content_type() = default;
+    explicit content_type(const std::string_view value) : value(value) {}
+
     std::string value;
 };
 
@@ -208,6 +241,9 @@ DEFINE_SIP_HEADER_WRITE(content_type) {
 }
 
 DECLARE_SIP_HEADER(max_forwards, "Max-Forwards") {
+    max_forwards() = default;
+    explicit max_forwards(const uint32_t value) : value(value) {}
+
     uint32_t value;
 };
 
@@ -220,6 +256,9 @@ DEFINE_SIP_HEADER_WRITE(max_forwards) {
 }
 
 DECLARE_SIP_HEADER(expires, "Expires") {
+    expires() = default;
+    explicit expires(const uint32_t value) : value(value) {}
+
     uint32_t value;
 };
 
@@ -273,6 +312,10 @@ DEFINE_SIP_HEADER_WRITE(contact) {
 }
 
 DECLARE_SIP_HEADER(via, "Via") {
+    via() = default;
+    via(const sip::version version, const sip::transport transport, inet_address address)
+        : version(version), transport(transport), address(std::move(address)) {}
+
     sip::version version;
     sip::transport transport;
     inet_address address;

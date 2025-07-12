@@ -191,7 +191,7 @@ session::session(const sip_session handle, impl::loop_context* context, std::sha
     setup_transport_listeners();
 }
 
-void session::listen(const looper::sip::method method, looper::sip::sip_request_callback&& callback) {
+void session::listen(const looper::sip::method method, looper::sip::sip_listen_callback&& callback) {
     std::unique_lock lock(m_mutex);
 
     m_listeners[method] = std::move(callback);
@@ -277,7 +277,7 @@ void session::setup_transport_listeners() {
 
             if (was_in_transaction) {
                 const looper::sip::message* message = nullptr;
-                invoke_func<>(lock, "sip_transaction_callback", m_request_callback, m_context->handle, m_handle, message, error);
+                invoke_func_r<>(lock, "sip_transaction_callback", m_request_callback, m_context->handle, m_handle, message, error);
             }
         }
     });
@@ -291,7 +291,7 @@ void session::setup_transport_listeners() {
 
             if (was_in_transaction) {
                 const looper::sip::message* message = nullptr;
-                invoke_func<>(lock, "sip_transaction_callback", m_request_callback, m_context->handle, m_handle, message, error);
+                invoke_func_r<>(lock, "sip_transaction_callback", m_request_callback, m_context->handle, m_handle, message, error);
             } else {
                 looper_trace_error(log_module, "session=%lu received error for writing when not in transaction", m_handle);
             }
@@ -304,21 +304,23 @@ void session::process_data(std::unique_lock<std::mutex>& lock) {
         // we have messages, lets transfer them
         const auto in_transaction = m_state == state::in_transaction;
         while (!m_in_messages.empty()) {
-            auto& message = m_in_messages.front();
+            auto message = std::move(m_in_messages.front());
+            m_in_messages.pop_front();
+
             if (in_transaction) {
                 if (message->is_request()) {
                     // we should receive a response, not request
                     looper_trace_error(log_module, "session=%lu received a request while in transaction", m_handle);
                 } else {
-                    m_state = state::open;
                     const looper::sip::message* msg = message.get();
-                    invoke_func<>(lock, "sip_transaction_callback", m_request_callback, m_context->handle, m_handle, msg, 0);
+                    const auto done = invoke_func_r<>(lock, "sip_transaction_callback", m_request_callback, m_context->handle, m_handle, msg, 0);
+                    if (done) {
+                        m_state = state::open;
+                    }
                 }
             } else {
                 delegate_to_listeners(lock, message.get());
             }
-
-            m_in_messages.pop_front();
         }
     }
 }
