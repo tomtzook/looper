@@ -88,6 +88,14 @@ std::optional<std::pair<std::string, std::unique_ptr<_base_attribute_holder>>> _
 
 const std::string message::unnamed_attr_generic_name = "";
 
+bool message::has_field(const std::string &name) const {
+    return m_fields.contains(name);
+}
+
+bool message::has_attribute(const std::string &name) const {
+    return m_named_attributes.contains(name);
+}
+
 std::istream& message::operator>>(std::istream& is) {
     while (is.peek() != std::istream::traits_type::eof()) {
         // read field

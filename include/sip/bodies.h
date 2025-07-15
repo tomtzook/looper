@@ -52,6 +52,7 @@ public:
     sdp_body() = default;
     sdp_body(const sdp_body&) = delete;
     sdp_body(sdp_body&&) = default;
+    explicit sdp_body(sdp::message&& msg) : m_message(std::move(msg)) {}
 
     [[nodiscard]] std::string content_type() const override;
 

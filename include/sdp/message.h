@@ -44,6 +44,8 @@ public:
     message(message&&) = default;
     ~message() = default;
 
+    [[nodiscard]] bool has_field(const std::string& name) const;
+
     template<fields::_field_type T>
     [[nodiscard]] bool has_field() const;
     template<fields::_field_type T>
@@ -54,6 +56,8 @@ public:
     void add_field(const T& field);
     template<fields::_field_type T>
     void add_field(T&& field);
+
+    [[nodiscard]] bool has_attribute(const std::string& name) const;
 
     template<attributes::_attribute_type T>
     [[nodiscard]] bool has_attribute() const;
@@ -80,19 +84,15 @@ private:
 
     using attr_map = std::map<std::string, std::vector<std::unique_ptr<attributes::_base_attribute_holder>>>;
     attr_map m_named_attributes;
+    // although technically nameless, we use identifiers to allow users to easily retreive
+    // the attribute
     attr_map m_unnamed_attributes;
 };
 
 template<fields::_field_type T>
 bool message::has_field() const {
     const auto name = looper::meta::_header_name<T>::name();
-
-    const auto it = m_fields.find(name);
-    if (it == m_fields.end()) {
-        return false;
-    } else {
-        return true;
-    }
+    return has_field(name);
 }
 
 template<fields::_field_type T>
@@ -161,18 +161,10 @@ template<attributes::_attribute_type T>
 bool message::has_attribute() const {
     const auto name = looper::meta::_header_name<T>::name();
 
-    const attr_map* map;
     if constexpr (std::is_base_of_v<attributes::_unnamed_attribute, T>) {
-        map = &m_unnamed_attributes;
+        return m_named_attributes.contains(name);
     } else {
-        map = &m_named_attributes;
-    }
-
-    const auto it = map->find(name);
-    if (it == map->end()) {
-        return false;
-    } else {
-        return true;
+        return has_attribute(name);
     }
 }
 

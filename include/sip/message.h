@@ -112,6 +112,8 @@ public:
     void set_status_line(const sip::status_line& line);
     void set_status_line(sip::status_line&& line);
 
+    [[nodiscard]] bool has_header(const std::string& name) const;
+
     template<headers::_header_type T>
     [[nodiscard]] bool has_header() const;
     template<headers::_header_type T>
@@ -151,12 +153,7 @@ private:
 template<headers::_header_type T>
 bool message::has_header() const {
     const auto name = looper::meta::_header_name<T>::name();
-    auto it = m_headers.find(name);
-    if (it == m_headers.end()) {
-        return false;
-    } else {
-        return true;
-    }
+    return has_header(name);
 }
 
 template<headers::_header_type T>
@@ -223,6 +220,10 @@ void message::add_header(T&& header) {
 
 template<headers::_header_type T>
 void message::copy_headers(const message& other) {
+    if (!other.has_header<T>()) {
+        return;
+    }
+
     auto headers = other.headers<T>();
     for (auto& header : headers) {
         add_header(std::move(header));

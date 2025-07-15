@@ -124,6 +124,7 @@ enum class transport {
 
 std::istream& operator>>(std::istream& is, transport& transport);
 std::ostream& operator<<(std::ostream& os, transport transport);
+const char* transport_str(transport transport);
 
 enum class auth_scheme {
     digest

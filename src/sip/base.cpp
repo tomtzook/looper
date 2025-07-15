@@ -350,6 +350,17 @@ std::ostream& operator<<(std::ostream& os, const transport transport) {
     return os;
 }
 
+const char* transport_str(const transport transport) {
+    switch (transport) {
+        case transport::tcp:
+            return "TCP";
+        case transport::udp:
+            return "UDP";
+        default:
+            throw std::runtime_error("Invalid transport");
+    }
+}
+
 std::istream& operator>>(std::istream& is, auth_scheme& auth_scheme) {
     const auto name = serialization::read_until(is, ' ');
     if (strcasecmp(name.c_str(), "digest") == 0) {

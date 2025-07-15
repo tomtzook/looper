@@ -291,6 +291,10 @@ void message::set_status_line(sip::status_line&& line) {
     m_request_line = std::nullopt;
 }
 
+bool message::has_header(const std::string& name) const {
+    return m_headers.contains(name);
+}
+
 bool message::has_body() const {
     return static_cast<bool>(m_body);
 }
