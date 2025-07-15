@@ -396,3 +396,105 @@ DEFINE_SIP_HEADER_WRITE(record_route) {
 
     os << '>';
 }
+
+DECLARE_SIP_HEADER(authorization, "Authorization") {
+    auth_scheme scheme;
+    std::string username;
+    std::string uri;
+    std::string realm;
+    auth_algorithm algorithm;
+    std::string qop;
+    std::string nonce;
+    std::optional<uint16_t> nc;
+    std::optional<std::string> cnonce;
+    std::optional<std::string> response;
+    serialization::tag_map additional_tags;
+};
+
+DEFINE_SIP_HEADER_READ(authorization) {
+    is >> h.scheme;
+    serialization::consume(is, ' ');
+
+    auto tags = serialization::read_tags(is, ',', '\r');
+    h.username = serialization::pop_tag(tags, "username");
+    h.uri = serialization::pop_tag(tags, "uri");
+    h.realm = serialization::pop_tag(tags, "realm");
+    h.qop = serialization::pop_tag(tags, "qop");
+    h.nonce = serialization::pop_tag(tags, "nonce");
+    h.algorithm = serialization::pop_tag_as<auth_algorithm>(tags, "algorithm");
+    h.nc = serialization::try_pop_tag_int16(tags, "nc");
+    h.cnonce = serialization::try_pop_tag(tags, "cnonce");
+    h.response = serialization::try_pop_tag(tags, "response");
+    h.additional_tags = tags;
+}
+
+DEFINE_SIP_HEADER_WRITE(authorization) {
+    os << h.scheme;
+    os << ' ';
+
+    serialization::tag_map tags;
+
+    serialization::put_tag_with_quotes(tags, "username", h.username);
+    serialization::put_tag_with_quotes(tags, "uri", h.uri);
+    serialization::put_tag_with_quotes(tags, "realm", h.realm);
+    serialization::put_tag_with_quotes(tags, "nonce", h.nonce);
+    serialization::put_tag_as(tags, "algorithm", h.algorithm);
+
+    tags["qop"] = h.qop;
+
+    if (h.cnonce) {
+        serialization::put_tag_with_quotes(tags, "cnonce", h.cnonce.value());
+    }
+    if (h.response) {
+        serialization::put_tag_with_quotes(tags, "response", h.response.value());
+    }
+
+    tags.insert(h.additional_tags.begin(), h.additional_tags.end());
+
+    serialization::write_tags(os, tags, ',');
+
+    if (h.nc) {
+        os << ",nc=" << std::setfill('0') << std::setw(8) << h.nc.value();
+    }
+}
+
+DECLARE_SIP_HEADER(www_authorization, "WWW-Authenticate") {
+    auth_scheme scheme;
+    std::string uri;
+    std::string realm;
+    auth_algorithm algorithm;
+    std::string qop;
+    std::string nonce;
+    serialization::tag_map additional_tags;
+};
+
+DEFINE_SIP_HEADER_READ(www_authorization) {
+    is >> h.scheme;
+    serialization::consume(is, ' ');
+
+    auto tags = serialization::read_tags(is, ',', '\r');
+    h.uri = serialization::pop_tag(tags, "uri");
+    h.realm = serialization::pop_tag(tags, "realm");
+    h.qop = serialization::pop_tag(tags, "qop");
+    h.nonce = serialization::pop_tag(tags, "nonce");
+    h.algorithm = serialization::pop_tag_as<auth_algorithm>(tags, "algorithm");
+    h.additional_tags = tags;
+}
+
+DEFINE_SIP_HEADER_WRITE(www_authorization) {
+    os << h.scheme;
+    os << ' ';
+
+    serialization::tag_map tags;
+
+    serialization::put_tag_with_quotes(tags, "uri", h.uri);
+    serialization::put_tag_with_quotes(tags, "realm", h.realm);
+    serialization::put_tag_with_quotes(tags, "nonce", h.nonce);
+    serialization::put_tag_as(tags, "algorithm", h.algorithm);
+
+    tags["qop"] = h.qop;
+
+    tags.insert(h.additional_tags.begin(), h.additional_tags.end());
+
+    serialization::write_tags(os, tags, ',');
+}

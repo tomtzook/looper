@@ -40,4 +40,14 @@ enum class media_protocol {
 std::istream& operator>>(std::istream& is, media_protocol& media_protocol);
 std::ostream& operator<<(std::ostream& os, media_protocol media_protocol);
 
+enum class transmit_mode {
+    recvonly,
+    sendrecv,
+    sendonly,
+    inactive
+};
+
+std::istream& operator>>(std::istream& is, transmit_mode& transmit_mode);
+std::ostream& operator<<(std::ostream& os, transmit_mode transmit_mode);
+
 }

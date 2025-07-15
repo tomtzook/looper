@@ -313,6 +313,9 @@ void session::process_data(std::unique_lock<std::mutex>& lock) {
                     looper_trace_error(log_module, "session=%lu received a request while in transaction", m_handle);
                 } else {
                     const looper::sip::message* msg = message.get();
+                    // todo: if some ones call destroy here, then our memory will be released and we'd be fucked....
+                    //      could refuse to release immediately, make sure to close and exit here
+                    //      of course, we'd have to release the memory at some point
                     const auto done = invoke_func_r<>(lock, "sip_transaction_callback", m_request_callback, m_context->handle, m_handle, msg, 0);
                     if (done) {
                         m_state = state::open;

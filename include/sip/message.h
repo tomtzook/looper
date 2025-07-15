@@ -118,10 +118,13 @@ public:
     T header() const;
     template<headers::_header_type T>
     std::vector<T> headers() const;
+
     template<headers::_header_type T>
     void add_header(const T& header);
     template<headers::_header_type T>
     void add_header(T&& header);
+    template<headers::_header_type T>
+    void copy_headers(const message& other);
 
     [[nodiscard]] bool has_body() const;
     template<bodies::_body_type T>
@@ -159,12 +162,13 @@ bool message::has_header() const {
 template<headers::_header_type T>
 T message::header() const {
     const auto name = looper::meta::_header_name<T>::name();
-    auto it = m_headers.find(name);
+
+    const auto it = m_headers.find(name);
     if (it == m_headers.end()) {
         throw headers::header_not_found();
     }
 
-    if (it->second.size() < 1) {
+    if (it->second.empty()) {
         throw headers::header_not_found();
     }
 
@@ -175,12 +179,13 @@ T message::header() const {
 template<headers::_header_type T>
 std::vector<T> message::headers() const {
     const auto name = looper::meta::_header_name<T>::name();
-    auto it = m_headers.find(name);
+
+    const auto it = m_headers.find(name);
     if (it == m_headers.end()) {
         throw headers::header_not_found();
     }
 
-    if (it->second.size() < 1) {
+    if (it->second.empty()) {
         throw headers::header_not_found();
     }
 
@@ -188,7 +193,7 @@ std::vector<T> message::headers() const {
     result.reserve(it->second.size());
 
     for (auto& ptr : it->second) {
-        auto holder = reinterpret_cast<headers::_header_holder<T>*>(it->second[0].get());
+        auto holder = reinterpret_cast<headers::_header_holder<T>*>(ptr.get());
         result.push_back(holder->value);
     }
 
@@ -203,12 +208,25 @@ void message::add_header(const T& header) {
 
 template<headers::_header_type T>
 void message::add_header(T&& header) {
-    const auto name = looper::meta::_header_name<T>::name();
+    std::string name;
+    if constexpr (std::is_same_v<T, sip::headers::generic_header>) {
+        name = header.name;
+    } else {
+        name = looper::meta::_header_name<T>::name();
+    }
 
     auto holder = std::make_unique<headers::_header_holder<T>>();
     holder->value = std::forward<T>(header);
 
     add_header(name, std::move(holder));
+}
+
+template<headers::_header_type T>
+void message::copy_headers(const message& other) {
+    auto headers = other.headers<T>();
+    for (auto& header : headers) {
+        add_header(std::move(header));
+    }
 }
 
 template<bodies::_body_type T>

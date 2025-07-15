@@ -122,4 +122,41 @@ std::ostream& operator<<(std::ostream& os, const media_protocol media_protocol) 
     return os;
 }
 
+std::istream& operator>>(std::istream& is, transmit_mode& transmit_mode) {
+    char buff[8];
+    is.read(buff, 8);
+
+    if (strcasecmp(buff, "recvonly") == 0) {
+        transmit_mode = transmit_mode::recvonly;
+    } else if (strcasecmp(buff, "sendrecv") == 0) {
+        transmit_mode = transmit_mode::sendrecv;
+    } else if (strcasecmp(buff, "sendonly") == 0) {
+        transmit_mode = transmit_mode::sendonly;
+    } else if (strcasecmp(buff, "inactive") == 0) {
+        transmit_mode = transmit_mode::inactive;
+    } else {
+        throw std::runtime_error("Invalid transmit_mode");
+    }
+
+    return is;
+}
+
+std::ostream& operator<<(std::ostream& os, const transmit_mode transmit_mode) {
+    switch (transmit_mode) {
+        case transmit_mode::recvonly:
+            os << "recvonly";
+            break;
+        case transmit_mode::sendrecv:
+            os << "sendrecv";
+            break;
+        case transmit_mode::sendonly:
+            os << "sendonly";
+            break;
+        case transmit_mode::inactive:
+            os << "inactive";
+            break;
+    }
+    return os;
+}
+
 }

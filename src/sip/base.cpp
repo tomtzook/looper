@@ -350,6 +350,57 @@ std::ostream& operator<<(std::ostream& os, const transport transport) {
     return os;
 }
 
+std::istream& operator>>(std::istream& is, auth_scheme& auth_scheme) {
+    const auto name = serialization::read_until(is, ' ');
+    if (strcasecmp(name.c_str(), "digest") == 0) {
+        auth_scheme = auth_scheme::digest;
+    } else {
+        throw std::runtime_error("Invalid auth scheme");
+    }
+
+    return is;
+}
+
+std::ostream& operator<<(std::ostream& os, const auth_scheme auth_scheme) {
+    switch (auth_scheme) {
+        case auth_scheme::digest:
+            os << "Digest";
+            break;
+        default:
+            throw std::runtime_error("Invalid auth scheme");
+    }
+
+    return os;
+}
+
+std::istream& operator>>(std::istream& is, auth_algorithm& auth_algorithm) {
+    const auto name = serialization::read_until(is, ' ');
+    if (strcasecmp(name.c_str(), "AKAv1-MD5") == 0) {
+        auth_algorithm = auth_algorithm::aka;
+    } else if (strcasecmp(name.c_str(), "MD5") == 0) {
+        auth_algorithm = auth_algorithm::md5;
+    } else {
+        throw std::runtime_error("Invalid auth scheme");
+    }
+
+    return is;
+}
+
+std::ostream& operator<<(std::ostream& os, const auth_algorithm auth_algorithm) {
+    switch (auth_algorithm) {
+        case auth_algorithm::aka:
+            os << "AKAv1-MD5";
+            break;
+        case auth_algorithm::md5:
+            os << "MD5";
+            break;
+        default:
+            throw std::runtime_error("Invalid auth algorithm");
+    }
+
+    return os;
+}
+
 namespace bodies {
 
 generic_body::generic_body()

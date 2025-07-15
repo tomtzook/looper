@@ -100,7 +100,7 @@ void read_headers(std::istream& is, message& msg) {
         serialization::consume(is, '\n');
     }
 
-    while (is.peek() != is.eof()) {
+    while (is.peek() != std::istream::traits_type::eof()) {
         // read header
         const auto name = serialization::read_until(is, ':');
         serialization::consume(is, ':');
@@ -119,11 +119,15 @@ void read_headers(std::istream& is, message& msg) {
         }
 
         serialization::consume_whitespaces(is);
-        serialization::consume(is, '\r');
-        serialization::consume(is, '\n');
+        if (serialization::try_consume(is, '\r')) {
+            serialization::consume(is, '\n');
+        } else if (is.peek() == std::istream::traits_type::eof()) {
+            break;
+        } else {
+            throw serialization::unexpected_character();
+        }
 
-        if (is.peek() == '\r') {
-            serialization::consume(is, '\r');
+        if (serialization::try_consume(is, '\r')) {
             serialization::consume(is, '\n');
             break;
         }
@@ -131,7 +135,7 @@ void read_headers(std::istream& is, message& msg) {
 }
 
 void read_body(std::istream& is, message& msg) {
-    if (is.peek() != is.eof()) {
+    if (is.peek() != std::istream::traits_type::eof()) {
         // read body
         if (msg.has_header<headers::content_type>()) {
             const auto content_type_header = msg.header<headers::content_type>();

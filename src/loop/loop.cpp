@@ -104,11 +104,12 @@ bool run_once(loop_context* context) {
     size_t event_count;
     lock.unlock();
     {
-        auto status = os::poll::poll(context->poller.get(),
-                                     max_events_for_process,
-                                     context->timeout,
-                                     context->event_data,
-                                     event_count);
+        const auto status = os::poll::poll(
+            context->poller.get(),
+            max_events_for_process,
+            context->timeout,
+            context->event_data,
+            event_count);
         if (status == error_interrupted) {
             // timeout
             event_count = 0;

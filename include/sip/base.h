@@ -125,4 +125,19 @@ enum class transport {
 std::istream& operator>>(std::istream& is, transport& transport);
 std::ostream& operator<<(std::ostream& os, transport transport);
 
+enum class auth_scheme {
+    digest
+};
+
+std::istream& operator>>(std::istream& is, auth_scheme& auth_scheme);
+std::ostream& operator<<(std::ostream& os, auth_scheme auth_scheme);
+
+enum class auth_algorithm {
+    aka,
+    md5
+};
+
+std::istream& operator>>(std::istream& is, auth_algorithm& auth_algorithm);
+std::ostream& operator<<(std::ostream& os, auth_algorithm auth_algorithm);
+
 }
