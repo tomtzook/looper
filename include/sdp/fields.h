@@ -51,19 +51,6 @@ struct _field_holder_creator final : _base_field_holder_creator {
 #define DEFINE_SDP_FIELD_READ(h_name) DEFINE_HEADER_READ(h_name, looper::sdp::fields)
 #define DEFINE_SDP_FIELD_WRITE(h_name) DEFINE_HEADER_WRITE(h_name, looper::sdp::fields)
 
-DECLARE_SDP_FIELD(generic_field, "") {
-    std::string name;
-    std::string value;
-};
-
-DEFINE_SDP_FIELD_READ(generic_field) {
-    h.value = serialization::read_line(is);
-}
-
-DEFINE_SDP_FIELD_WRITE(generic_field) {
-    os << h.value;
-}
-
 DECLARE_SDP_FIELD(sdp_version, "v") {
     sdp::version version;
 };

@@ -112,10 +112,8 @@ void read_headers(std::istream& is, message& msg) {
             holder->read(is);
             msg.add_header(name, std::move(holder));
         } else {
-            auto holder = std::make_unique<headers::_header_holder<headers::generic_header>>();
-            holder->value.name = name;
-            holder->read(is);
-            msg.add_header(name, std::move(holder));
+            // unknown header, consume
+            serialization::read_line(is);
         }
 
         serialization::consume_whitespaces(is);

@@ -74,8 +74,6 @@ public:
     std::ostream& operator<<(std::ostream& os);
 
 private:
-    static const std::string unnamed_attr_generic_name;
-
     void add_field(const std::string& name, std::unique_ptr<fields::_base_field_holder> holder);
     void add_named_attribute(const std::string& name, std::unique_ptr<attributes::_base_attribute_holder> holder);
     void add_unnamed_attribute(const std::string& name, std::unique_ptr<attributes::_base_attribute_holder> holder);
@@ -144,12 +142,7 @@ void message::add_field(const T& field) {
 
 template<fields::_field_type T>
 void message::add_field(T&& field) {
-    std::string name;
-    if constexpr (std::is_same_v<T, sdp::fields::generic_field>) {
-        name = field.name;
-    } else {
-        name = looper::meta::_header_name<T>::name();
-    }
+    const auto name = looper::meta::_header_name<T>::name();
 
     auto holder = std::make_unique<fields::_field_holder<T>>();
     holder->value = std::forward<T>(field);
@@ -231,14 +224,7 @@ void message::add_attribute(const T& attribute) {
 
 template<attributes::_attribute_type T>
 void message::add_attribute(T&& attribute) {
-    std::string name;
-    if constexpr (std::is_same_v<T, sdp::attributes::generic_named_attribute>) {
-        name = attribute.name;
-    } else if constexpr (std::is_same_v<T, sdp::attributes::generic_unnamed_attribute>) {
-        name = unnamed_attr_generic_name;
-    } else {
-        name = looper::meta::_header_name<T>::name();
-    }
+    const auto name = looper::meta::_header_name<T>::name();
 
     auto holder = std::make_unique<attributes::_attribute_holder<T>>();
     holder->value = std::forward<T>(attribute);

@@ -78,19 +78,6 @@ struct _unnamed_attribute_holder_creator final : _base_unnamed_attribute_holder_
 #define DEFINE_SDP_ATTRIBUTE_READ(h_name) DEFINE_HEADER_READ(h_name, looper::sdp::attributes)
 #define DEFINE_SDP_ATTRIBUTE_WRITE(h_name) DEFINE_HEADER_WRITE(h_name, looper::sdp::attributes)
 
-DECLARE_SDP_NAMED_ATTRIBUTE(generic_named_attribute, "") {
-    std::string name;
-    std::string value;
-};
-
-DEFINE_SDP_ATTRIBUTE_READ(generic_named_attribute) {
-    h.value = serialization::read_line(is);
-}
-
-DEFINE_SDP_ATTRIBUTE_WRITE(generic_named_attribute) {
-    os << h.value;
-}
-
 DECLARE_SDP_NAMED_ATTRIBUTE(rtcp, "rtcp") {
     uint16_t port;
 };
@@ -192,16 +179,4 @@ DEFINE_SDP_ATTRIBUTE_READ(transmit_mode) {
 
 DEFINE_SDP_ATTRIBUTE_WRITE(transmit_mode) {
     os << h.mode;
-}
-
-DECLARE_SDP_UNNAMED_ATTRIBUTE(generic_unnamed_attribute, "") {
-    std::string value;
-};
-
-DEFINE_SDP_ATTRIBUTE_READ(generic_unnamed_attribute) {
-    h.value = serialization::read_line(is);
-}
-
-DEFINE_SDP_ATTRIBUTE_WRITE(generic_unnamed_attribute) {
-    os << h.value;
 }

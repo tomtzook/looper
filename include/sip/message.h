@@ -205,12 +205,7 @@ void message::add_header(const T& header) {
 
 template<headers::_header_type T>
 void message::add_header(T&& header) {
-    std::string name;
-    if constexpr (std::is_same_v<T, sip::headers::generic_header>) {
-        name = header.name;
-    } else {
-        name = looper::meta::_header_name<T>::name();
-    }
+    const auto name = looper::meta::_header_name<T>::name();
 
     auto holder = std::make_unique<headers::_header_holder<T>>();
     holder->value = std::forward<T>(header);

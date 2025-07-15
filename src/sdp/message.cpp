@@ -86,8 +86,6 @@ std::optional<std::pair<std::string, std::unique_ptr<_base_attribute_holder>>> _
 
 }
 
-const std::string message::unnamed_attr_generic_name = "";
-
 bool message::has_field(const std::string &name) const {
     return m_fields.contains(name);
 }
@@ -116,10 +114,8 @@ std::istream& message::operator>>(std::istream& is) {
                     holder->read(is);
                     add_named_attribute(attr, std::move(holder));
                 } else {
-                    auto holder = std::make_unique<attributes::_attribute_holder<attributes::generic_named_attribute>>();
-                    holder->value.name = attr;
-                    holder->read(is);
-                    add_named_attribute(attr, std::move(holder));
+                    // unknown, consume and ignore
+                    serialization::read_line(is);
                 }
             } else {
                 // unnamed attribute (attr=value)
@@ -132,9 +128,8 @@ std::istream& message::operator>>(std::istream& is) {
                     holder->read(attr_is);
                     add_unnamed_attribute(name, std::move(holder));
                 } else {
-                    auto holder = std::make_unique<attributes::_attribute_holder<attributes::generic_unnamed_attribute>>();
-                    holder->read(attr_is);
-                    add_unnamed_attribute(unnamed_attr_generic_name, std::move(holder));
+                    // unknown, consume and ignore
+                    serialization::read_line(is);
                 }
             }
         } else {
@@ -145,10 +140,8 @@ std::istream& message::operator>>(std::istream& is) {
                 holder->read(is);
                 add_field(name, std::move(holder));
             } else {
-                auto holder = std::make_unique<fields::_field_holder<fields::generic_field>>();
-                holder->value.name = name;
-                holder->read(is);
-                add_field(name, std::move(holder));
+                // unknown, consume and ignore
+                serialization::read_line(is);
             }
         }
 

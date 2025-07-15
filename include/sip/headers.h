@@ -52,20 +52,6 @@ struct _header_holder_creator final : _base_header_holder_creator {
 #define DEFINE_SIP_HEADER_READ(h_name) DEFINE_HEADER_READ(h_name, looper::sip::headers)
 #define DEFINE_SIP_HEADER_WRITE(h_name) DEFINE_HEADER_WRITE(h_name, looper::sip::headers)
 
-
-DECLARE_SIP_HEADER(generic_header, "") {
-    std::string name;
-    std::string value;
-};
-
-DEFINE_SIP_HEADER_READ(generic_header) {
-    h.value = serialization::read_line(is);
-}
-
-DEFINE_SIP_HEADER_WRITE(generic_header) {
-    os << h.value;
-}
-
 DECLARE_SIP_HEADER(cseq, "CSeq") {
     cseq() = default;
     cseq(const uint32_t seq_num, const sip::method method)
