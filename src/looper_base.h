@@ -7,7 +7,6 @@
 #include <looper.h>
 #include <looper_tcp.h>
 #include <looper_udp.h>
-#include <looper_sip.h>
 
 #include "util/handles.h"
 #include "util/util.h"
@@ -19,7 +18,6 @@
 #include "loop/loop_event.h"
 #include "loop/loop_tcp.h"
 #include "loop/loop_udp.h"
-#include "sip/session.h"
 
 namespace looper {
 
@@ -40,7 +38,6 @@ struct loop_data {
         , m_tcps(handles::handle{handle}.index(), handles::type_tcp)
         , m_tcp_servers(handles::handle{handle}.index(), handles::type_tcp_server)
         , m_udps(handles::handle{handle}.index(), handles::type_udp)
-        , m_sip_sessions(handles::handle{handle}.index(), handles::type_sip_session)
     {}
     ~loop_data() {
         if (m_thread && m_thread->joinable()) {
@@ -74,7 +71,6 @@ struct loop_data {
     handles::handle_table<impl::tcp, handle_counts_per_type> m_tcps;
     handles::handle_table<impl::tcp_server, handle_counts_per_type> m_tcp_servers;
     handles::handle_table<impl::udp, handle_counts_per_type> m_udps;
-    handles::handle_table<impl::sip::session, handle_counts_per_type> m_sip_sessions;
 };
 
 struct looper_data {

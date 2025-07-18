@@ -21,19 +21,18 @@ enum handle_types : uint8_t {
     type_tcp,
     type_tcp_server,
     type_udp,
-    type_sip_session,
     type_max
 };
 
 struct handle {
 public:
-    explicit handle(handle_raw raw)
+    explicit handle(const handle_raw raw)
         : m_parent(0)
         , m_type(0)
         , m_index(0) {
         this->raw(raw);
     }
-    handle(uint8_t parent, uint8_t type, uint16_t index)
+    handle(const uint8_t parent, const uint8_t type, const uint16_t index)
         : m_parent(parent)
         , m_type(type)
         , m_index(index)
@@ -43,7 +42,7 @@ public:
         return m_parent;
     }
 
-    inline void parent(uint8_t parent) {
+    inline void parent(const uint8_t parent) {
         m_parent = parent;
     }
 
@@ -51,7 +50,7 @@ public:
         return m_type;
     }
 
-    inline void type(uint8_t type) {
+    inline void type(const uint8_t type) {
         m_type = type;
     }
 
@@ -59,7 +58,7 @@ public:
         return m_index;
     }
 
-    inline void index(uint16_t index) {
+    inline void index(const uint16_t index) {
         m_index = index;
     }
 
@@ -67,7 +66,7 @@ public:
         return (m_parent & 0xffff) | ((m_type & 0xffff) << 8) | ((m_index & 0xffffffff) << 16);
     }
 
-    inline void raw(handle_raw raw) {
+    inline void raw(const handle_raw raw) {
         m_parent = raw & 0xffff;
         m_type = (raw >> 8) & 0xffff;
         m_index = (raw >> 16) & 0xffffffff;
