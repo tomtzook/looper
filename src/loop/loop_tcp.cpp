@@ -128,7 +128,7 @@ void tcp::on_connect_done(std::unique_lock<std::mutex>& lock, const error error)
         invoke_func<>(lock, "tcp_loop_callback", m_connect_callback, m_context->handle, m_handle, error);
     } else {
         mark_errored();
-        looper_trace_error(log_module, "tcp connection failed: handle=%lu, code=%s", m_handle, error);
+        looper_trace_error(log_module, "tcp connection failed: handle=%lu, code=0x%x", m_handle, error);
         invoke_func<>(lock, "tcp_loop_callback", m_connect_callback, m_context->handle, m_handle, error);
     }
 }
