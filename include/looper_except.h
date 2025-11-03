@@ -6,9 +6,9 @@
 
 namespace looper {
 
-class loop_closing_exception : public std::exception {
+class loop_closing_exception final : public std::exception {
 public:
-    explicit loop_closing_exception(loop handle)
+    explicit loop_closing_exception(const loop handle)
         : m_handle(handle)
     {}
 
@@ -24,15 +24,15 @@ private:
     loop m_handle;
 };
 
-class no_space_exception : public std::exception {
+class no_space_exception final : public std::exception {
     [[nodiscard]] const char * what() const noexcept override {
         return "no space more more data";
     }
 };
 
-class bad_handle_exception : public std::exception {
+class bad_handle_exception final : public std::exception {
 public:
-    explicit bad_handle_exception(handle handle)
+    explicit bad_handle_exception(const handle handle)
         : m_handle(handle)
     {}
 
@@ -48,9 +48,9 @@ private:
     handle m_handle;
 };
 
-class no_such_handle_exception : public std::exception {
+class no_such_handle_exception final : public std::exception {
 public:
-    explicit no_such_handle_exception(handle handle)
+    explicit no_such_handle_exception(const handle handle)
         : m_handle(handle)
     {}
 
@@ -66,9 +66,9 @@ private:
     handle m_handle;
 };
 
-class os_exception : public std::exception {
+class os_exception final : public std::exception {
 public:
-    explicit os_exception(looper::error code)
+    explicit os_exception(const looper::error code)
         : m_code(code)
     {}
 

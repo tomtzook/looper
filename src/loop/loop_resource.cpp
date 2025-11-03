@@ -17,7 +17,7 @@ void looper_resource::attach_to_loop(const os::descriptor descriptor, const even
         throw std::runtime_error("already attached as resource");
     }
 
-    m_resource = add_resource(m_context, descriptor, events, [this](loop_context*, void*, event_types events)->void {
+    m_resource = add_resource(m_context, descriptor, events, [this](loop_context*, void*, const event_types events)->void {
         std::unique_lock lock(m_context->mutex);
         if (m_resource == empty_handle) {
             return;

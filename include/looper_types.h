@@ -24,20 +24,36 @@ using tcp_server = handle;
 using udp = handle;
 using sip_session = handle;
 
+struct inet_address;
+struct inet_address_view;
+
+
 struct inet_address_view {
     std::string_view ip;
-    uint16_t port;
+    uint16_t port{};
+
+    inet_address_view() = default;
+    inet_address_view(std::string_view ip, uint16_t port);
+    inet_address_view(inet_address_view&) = default;
+    inet_address_view(inet_address_view&&) = default;
+
+    // ReSharper disable once CppNonExplicitConvertingConstructor
+    inet_address_view(const inet_address&); // NOLINT(*-explicit-constructor)
+    inet_address_view& operator=(const inet_address&);
 };
 
 struct inet_address {
     std::string ip;
-    uint16_t port;
+    uint16_t port{};
 
-    inet_address& operator=(const inet_address_view &view) {
-        this->ip = std::string(view.ip);
-        this->port = view.port;
-        return *this;
-    }
+    inet_address() = default;
+    inet_address(std::string_view ip, uint16_t port);
+    inet_address(inet_address&) = default;
+    inet_address(inet_address&&) = default;
+
+    // ReSharper disable once CppNonExplicitConvertingConstructor
+    inet_address(const inet_address_view&); // NOLINT(*-explicit-constructor)
+    inet_address& operator=(const inet_address_view&);
 };
 
 using loop_callback = std::function<void(loop)>;

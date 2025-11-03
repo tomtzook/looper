@@ -56,6 +56,7 @@ set(SOURCES
         src/loop/loop_timer.cpp
         src/loop/loop_future.h
         src/loop/loop_future.cpp
+        src/looper_types.cpp
 )
 
 if (UNIX)
