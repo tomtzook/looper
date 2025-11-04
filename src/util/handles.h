@@ -95,6 +95,7 @@ public:
 
     std::pair<handle_raw, type_&> assign(handle_raw new_handle, std::shared_ptr<type_>&& ptr);
     std::shared_ptr<type_> release(handle_raw handle_raw);
+    void clear();
 
     iterator begin();
     iterator end();
@@ -219,6 +220,15 @@ std::shared_ptr<type_> handle_table<type_, capacity_>::release(const handle_raw 
     m_count--;
 
     return std::move(data);
+}
+
+template<typename type_, size_t capacity_>
+void handle_table<type_, capacity_>::clear() {
+    for (int i = 0; i < capacity; ++i) {
+        m_data[i].reset();
+    }
+
+    m_count = 0;
 }
 
 template<typename type_, size_t capacity_>

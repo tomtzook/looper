@@ -23,7 +23,7 @@ public:
     public:
         control(resource_state& state, const looper_resource::control& resource_control);
 
-        void request_events(event_types events, events_update_type type);
+        void request_events(event_types events, events_update_type type) const;
 
         resource_state& state;
     private:

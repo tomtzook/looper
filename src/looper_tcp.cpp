@@ -10,7 +10,7 @@ tcp create_tcp(const loop loop) {
 
     auto& data = get_loop(loop);
 
-    auto [handle, tcp_impl] = data.m_tcps.allocate_new(data.m_context);
+    auto [handle, tcp_impl] = data.m_tcps.allocate_new(data.m_context.get());
     looper_trace_info(log_module, "created new tcp: loop=%lu, handle=%lu", data.m_handle, handle);
     data.m_tcps.assign(handle, std::move(tcp_impl));
 
@@ -109,7 +109,7 @@ tcp_server create_tcp_server(const loop loop) {
 
     auto& data = get_loop(loop);
 
-    auto [handle, tcp_impl] = data.m_tcp_servers.allocate_new(data.m_context);
+    auto [handle, tcp_impl] = data.m_tcp_servers.allocate_new(data.m_context.get());
     looper_trace_info(log_module, "creating new tcp server: loop=%lu, handle=%lu", data.m_handle, handle);
     data.m_tcp_servers.assign(handle, std::move(tcp_impl));
 

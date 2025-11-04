@@ -3,15 +3,10 @@
 
 #include "os/factory.h"
 #include "loop.h"
-#include "loop_internal.h"
 
 namespace looper::impl {
 
 #define log_module loop_log_module
-
-static void run_signal_resource_handler(const loop_context* context, resource, void*, event_types) {
-    os::event::clear(context->run_loop_event.get());
-}
 
 static void process_timers(const loop_context* context, std::unique_lock<std::mutex>& lock) {
     std::vector<loop_timer_callback> to_call;
@@ -55,36 +50,6 @@ static void process_futures(const loop_context* context, std::unique_lock<std::m
         invoke_func_nolock("future_callback", callback);
     }
     lock.lock();
-}
-
-loop_context* create_loop(const looper::loop handle) {
-    looper_trace_info(log_module, "creating looper");
-
-    auto context = std::make_unique<loop_context>(handle);
-    add_resource(context.get(),
-                 os::event::get_descriptor(context->run_loop_event.get()),
-                 event_in, run_signal_resource_handler);
-
-    return context.release();
-}
-
-void destroy_loop(loop_context* context) {
-    std::unique_lock lock(context->mutex);
-
-    looper_trace_info(log_module, "stopping looper");
-
-    context->stop = true;
-    signal_run(context);
-
-    if (context->executing) {
-        context->run_finished.wait(lock, [context]()->bool {
-            return !context->executing;
-        });
-    }
-
-    lock.unlock();
-    // todo: there might still be a race here with someone trying to take the lock
-    delete context;
 }
 
 // run

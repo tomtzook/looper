@@ -4,7 +4,6 @@
 
 #include <looper_types.h>
 #include <looper_except.h>
-#include <looper_trace.h>
 
 namespace looper {
 
@@ -13,6 +12,7 @@ void destroy(loop loop);
 loop get_parent_loop(handle handle);
 
 void run_once(loop loop);
+void run_for(loop loop, std::chrono::milliseconds time);
 void run_forever(loop loop);
 
 void exec_in_thread(loop loop);

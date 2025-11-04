@@ -9,7 +9,9 @@ looper_data& get_global_loop_data() {
     return g_instance;
 }
 
-static void run_loop_forever(const loop loop) {
+static void run_loop(const loop loop, const std::chrono::milliseconds time = no_timeout) {
+    const auto end_time = impl::time_now() + time;
+
     while (true) {
         std::unique_lock lock(get_global_loop_data().m_mutex);
         auto data_opt = try_get_loop(loop);
@@ -17,10 +19,17 @@ static void run_loop_forever(const loop loop) {
             break;
         }
 
+        if (time > no_timeout) {
+            const auto now = impl::time_now();
+            if (now >= end_time) {
+                break;
+            }
+        }
+
         const auto* data = data_opt.value();
         lock.unlock();
 
-        const auto finished = impl::run_once(data->m_context);
+        const auto finished = impl::run_once(data->m_context.get());
         if (finished) {
             break;
         }
@@ -28,13 +37,14 @@ static void run_loop_forever(const loop loop) {
 }
 
 static void thread_main(const loop loop) {
-    run_loop_forever(loop);
+    run_loop(loop);
 }
 
 static future create_future_internal(const loop loop, future_callback&& callback) {
     auto& data = get_loop(loop);
 
-    auto [handle, future_impl] = data.m_futures.allocate_new(data.m_context, std::move(callback));
+    auto [handle, future_impl] = data.m_futures.allocate_new(
+        data.m_context.get(), std::move(callback));
     looper_trace_info(log_module, "creating future: loop=%lu, handle=%lu", loop, handle);
     data.m_futures.assign(handle, std::move(future_impl));
 
@@ -117,7 +127,21 @@ void run_once(const loop loop) {
     looper_trace_debug(log_module, "running loop once: handle=%lu", loop);
 
     lock.unlock();
-    impl::run_once(data.m_context);
+    impl::run_once(data.m_context.get());
+}
+
+void run_for(const loop loop, const std::chrono::milliseconds time) {
+    std::unique_lock lock(get_global_loop_data().m_mutex);
+
+    const auto& data = get_loop(loop);
+    if (data.m_thread) {
+        throw std::runtime_error("loop running in thread");
+    }
+
+    looper_trace_debug(log_module, "running loop for time: handle=%lu, time=%lu", loop, time.count());
+
+    lock.unlock();
+    run_loop(loop, time);
 }
 
 void run_forever(const loop loop) {
@@ -131,7 +155,7 @@ void run_forever(const loop loop) {
     looper_trace_info(log_module, "running loop forever: handle=%lu", loop);
 
     lock.unlock();
-    run_loop_forever(loop);
+    run_loop(loop);
 }
 
 void exec_in_thread(loop loop) {
@@ -201,7 +225,7 @@ event create_event(const loop loop, event_callback&& callback) {
 
     auto& data = get_loop(loop);
 
-    auto [handle, event_data] = data.m_events.allocate_new(data.m_context, std::move(callback));
+    auto [handle, event_data] = data.m_events.allocate_new(data.m_context.get(), std::move(callback));
     looper_trace_info(log_module, "created new event: loop=%lu, handle=%lu", loop, handle);
     data.m_events.assign(handle, std::move(event_data));
 
@@ -246,7 +270,7 @@ timer create_timer(const loop loop, std::chrono::milliseconds timeout, timer_cal
 
     auto& data = get_loop(loop);
 
-    auto [handle, timer_impl] = data.m_timers.assign_new(data.m_context, std::move(callback), timeout);
+    auto [handle, timer_impl] = data.m_timers.assign_new(data.m_context.get(), std::move(callback), timeout);
     looper_trace_info(log_module, "creating new timer: loop=%lu, handle=%lu, timeout=%lu", data.m_handle, handle, timeout.count());
 
     return handle;

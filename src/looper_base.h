@@ -27,7 +27,7 @@ static constexpr size_t loops_count = 8;
 struct loop_data {
     explicit loop_data(const loop handle)
         : m_handle(handle)
-        , m_context(impl::create_loop(handle))
+        , m_context(std::make_shared<impl::loop_context>(handle))
         , m_closing(false)
         , m_thread(nullptr)
         , m_events(handles::handle{handle}.index(), handles::type_event)
@@ -52,14 +52,20 @@ struct loop_data {
     loop_data& operator=(loop_data&&) = delete;
 
     void clear_context() {
-        if (m_context != nullptr) {
-            impl::destroy_loop(m_context);
-            m_context = nullptr;
-        }
+        // must clear all handles first otherwise they cannot access the context.
+        m_events.clear();
+        m_timers.clear();
+        m_futures.clear();
+        m_tcps.clear();
+        m_tcp_servers.clear();
+        m_udps.clear();
+
+        // todo: use the context as shared ptr everywhere
+        m_context.reset();
     }
 
     loop m_handle;
-    impl::loop_context* m_context;
+    std::shared_ptr<impl::loop_context> m_context;
     bool m_closing;
 
     std::unique_ptr<std::thread> m_thread;

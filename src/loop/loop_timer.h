@@ -1,6 +1,6 @@
 #pragma once
 
-#include "loop_internal.h"
+#include "loop.h"
 
 namespace looper::impl {
 

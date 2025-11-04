@@ -1,6 +1,6 @@
 
 #include "looper_trace.h"
-#include "loop_internal.h"
+#include "loop.h"
 #include "loop_tcp.h"
 
 #include "loop_stream.h"

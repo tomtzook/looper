@@ -1,12 +1,16 @@
 
 #include "looper_trace.h"
-#include "loop_internal.h"
+#include "loop.h"
 
 namespace looper::impl {
 
 #define log_module loop_log_module
 
 constexpr event_types must_have_events = event_error | event_hung;
+
+static void run_signal_resource_handler(const loop_context* context, resource, void*, event_types) {
+    os::event::clear(context->run_loop_event.get());
+}
 
 static void process_update(loop_context* context, const update& update) {
     if (!context->resource_table.has(update.handle)) {
@@ -57,22 +61,46 @@ static void process_update(loop_context* context, const update& update) {
 }
 
 loop_context::loop_context(const looper::loop handle)
-        : handle(handle)
-        , mutex()
-        , poller(os::make_poller())
-        , timeout(initial_poll_timeout)
-        , run_loop_event(os::make_event())
-        , event_data{}
-        , stop(false)
-        , executing(false)
-        , run_finished()
-        , resource_table(0, handles::type_resource)
-        , descriptor_map()
-        , futures()
-        , timers()
-        , updates() {
+    : handle(handle)
+    , mutex()
+    , poller(os::make_poller())
+    , timeout(initial_poll_timeout)
+    , run_loop_event(os::make_event())
+    , event_data{}
+    , stop(false)
+    , executing(false)
+    , run_finished()
+    , resource_table(0, handles::type_resource)
+    , descriptor_map()
+    , futures()
+    , timers()
+    , updates() {
     updates.resize(initial_reserve_size);
+
+    looper_trace_info(log_module, "creating looper");
+
+    add_resource(this,
+                 os::event::get_descriptor(run_loop_event.get()),
+                 event_in, run_signal_resource_handler);
 }
+
+loop_context::~loop_context() {
+    std::unique_lock lock(mutex);
+
+    looper_trace_info(log_module, "stopping looper");
+
+    stop = true;
+    signal_run(this);
+
+    if (executing) {
+        run_finished.wait(lock, [this]()->bool {
+            return !executing;
+        });
+    }
+
+    lock.unlock();
+}
+
 
 std::chrono::milliseconds time_now() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(

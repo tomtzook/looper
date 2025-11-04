@@ -1,6 +1,6 @@
 
 #include "looper_trace.h"
-#include "loop_internal.h"
+#include "loop.h"
 #include "loop_stream.h"
 
 namespace looper::impl {
@@ -12,7 +12,7 @@ stream::control::control(resource_state& state, const looper_resource::control& 
     , m_resource_control(resource_control)
 {}
 
-void stream::control::request_events(const event_types events, const events_update_type type) {
+void stream::control::request_events(const event_types events, const events_update_type type) const {
     m_resource_control.request_events(events, type);
 }
 
