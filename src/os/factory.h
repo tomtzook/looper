@@ -14,53 +14,77 @@
 
 namespace looper::os {
 
-using event_ptr = std::unique_ptr<event::event, decltype(&event::close)>;
-using tcp_ptr = std::unique_ptr<tcp::tcp, decltype(&tcp::close)>;
-using udp_ptr = std::unique_ptr<udp::udp, decltype(&udp::close)>;
-using poller_ptr = std::unique_ptr<poll::poller, decltype(&poll::close)>;
+struct event_deleter {
+    void operator()(event::event* event) const {
+        event::close(event);
+    }
+};
+
+struct tcp_deleter {
+    void operator()(tcp::tcp* tcp) const {
+        tcp::close(tcp);
+    }
+};
+
+struct udp_deleter {
+    void operator()(udp::udp* udp) const {
+        udp::close(udp);
+    }
+};
+
+struct poller_deleter {
+    void operator()(poll::poller* poller) const {
+        poll::close(poller);
+    }
+};
+
+using event_ptr = std::unique_ptr<event::event, event_deleter>;
+using tcp_ptr = std::unique_ptr<tcp::tcp, tcp_deleter>;
+using udp_ptr = std::unique_ptr<udp::udp, udp_deleter>;
+using poller_ptr = std::unique_ptr<poll::poller, poller_deleter>;
 
 static inline event_ptr make_event() {
     event::event* event;
-    auto status = event::create(&event);
+    const auto status = event::create(&event);
     if (status != error_success) {
         throw os_exception(status);
     }
 
-    return event_ptr(event, &event::close);
+    return event_ptr(event);
 }
 
 static inline tcp_ptr make_tcp(tcp::tcp* tcp) {
-    return tcp_ptr(tcp, &tcp::close);
+    return tcp_ptr(tcp);
 }
 
 static inline tcp_ptr make_tcp() {
     tcp::tcp* tcp;
-    auto status = tcp::create(&tcp);
+    const auto status = tcp::create(&tcp);
     if (status != error_success) {
         throw os_exception(status);
     }
 
-    return tcp_ptr(tcp, &tcp::close);
+    return tcp_ptr(tcp);
 }
 
 static inline udp_ptr make_udp() {
     udp::udp* udp;
-    auto status = udp::create(&udp);
+    const auto status = udp::create(&udp);
     if (status != error_success) {
         throw os_exception(status);
     }
 
-    return udp_ptr(udp, &udp::close);
+    return udp_ptr(udp);
 }
 
 static inline poller_ptr make_poller() {
     poll::poller* poller;
-    auto status = poll::create(&poller);
+    const auto status = poll::create(&poller);
     if (status != error_success) {
         throw os_exception(status);
     }
 
-    return poller_ptr(poller, &poll::close);
+    return poller_ptr(poller);
 }
 
 }
