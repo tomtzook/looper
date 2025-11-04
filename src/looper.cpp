@@ -99,6 +99,13 @@ void destroy(const loop loop) {
     looper_trace_info(log_module, "loop destroyed: handle=%lu", loop);
 }
 
+loop get_parent_loop(const handle handle) {
+    std::unique_lock lock(get_global_loop_data().m_mutex);
+    const auto& data = get_loop_from_handle(handle);
+
+    return data.m_handle;
+}
+
 void run_once(const loop loop) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
@@ -165,11 +172,11 @@ bool wait_for(const future future, const std::chrono::milliseconds timeout) {
 void execute_later(const loop loop, loop_callback&& callback) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
-    const auto future = create_future_internal(loop, [callback](const looper::loop loop, const looper::future future)->void {
-        std::unique_lock lock(get_global_loop_data().m_mutex);
-        destroy_future_internal(future);
+    const auto future = create_future_internal(loop, [callback](const looper::future future_cb)->void {
+        std::unique_lock lock_cb(get_global_loop_data().m_mutex);
+        destroy_future_internal(future_cb);
 
-        invoke_func(lock, "future_singleuse_callback", callback, loop);
+        invoke_func(lock_cb, "future_singleuse_callback", callback, future_cb);
     });
     execute_future_internal(future, no_delay);
 }
@@ -177,11 +184,11 @@ void execute_later(const loop loop, loop_callback&& callback) {
 bool execute_later_and_wait(const loop loop, loop_callback&& callback, const std::chrono::milliseconds timeout) {
     std::unique_lock lock(get_global_loop_data().m_mutex);
 
-    const auto future = create_future_internal(loop, [callback](const looper::loop loop, const looper::future future)->void {
-        std::unique_lock lock(get_global_loop_data().m_mutex);
-        destroy_future_internal(future);
+    const auto future = create_future_internal(loop, [callback](const looper::future future_cb)->void {
+        std::unique_lock lock_cb(get_global_loop_data().m_mutex);
+        destroy_future_internal(future_cb);
 
-        invoke_func(lock, "future_singleuse_callback", callback, loop);
+        invoke_func(lock_cb, "future_singleuse_callback", callback, future_cb);
     });
     execute_future_internal(future, no_delay);
 

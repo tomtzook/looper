@@ -33,7 +33,7 @@ private:
     void handle_events(std::unique_lock<std::mutex>& lock, looper_resource::control& control, event_types events);
     void handle_read(std::unique_lock<std::mutex>& lock, looper_resource::control& control);
     void handle_write(std::unique_lock<std::mutex>& lock, looper_resource::control& control);
-    void report_write_requests_finished(std::unique_lock<std::mutex>& lock, looper_resource::control& control);
+    void report_write_requests_finished(std::unique_lock<std::mutex>& lock);
     bool do_write();
 
     looper::udp m_handle;

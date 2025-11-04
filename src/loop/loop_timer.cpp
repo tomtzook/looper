@@ -63,7 +63,7 @@ void timer::reset() {
 
 void timer::handle_events() {
     std::unique_lock lock(m_context->mutex);
-    invoke_func(lock, "timer_callback", m_callback, m_context->handle, m_handle);
+    invoke_func(lock, "timer_callback", m_callback, m_handle);
 }
 
 }

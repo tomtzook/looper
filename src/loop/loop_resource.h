@@ -42,7 +42,6 @@ public:
         using handle_events_func = std::function<void(std::unique_lock<std::mutex>&, control&, event_types events)>;
 
         control(loop_context* context, looper::impl::resource& resource);
-        ~control();
 
         [[nodiscard]] looper::loop loop_handle() const;
         [[nodiscard]] looper::impl::resource handle() const;
@@ -57,6 +56,7 @@ public:
     };
 
     explicit looper_resource(loop_context* context);
+    ~looper_resource();
 
     [[nodiscard]] looper::loop loop_handle() const;
     [[nodiscard]] looper::impl::resource handle() const;

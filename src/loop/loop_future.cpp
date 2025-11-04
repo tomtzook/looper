@@ -59,7 +59,7 @@ void future::handle_events() {
     m_context->futures.remove(&m_context_data);
     m_exec_finished.notify_all();
 
-    invoke_func(lock, "future_callback", m_callback, m_context->handle, m_handle);
+    invoke_func(lock, "future_callback", m_callback, m_handle);
 }
 
 }

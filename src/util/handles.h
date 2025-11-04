@@ -61,46 +61,18 @@ public:
         using pointer           = value_type*;
         using reference         = value_type&;
 
-        iterator(handle_table& table, std::shared_ptr<value_type>* ptr, size_t index)
-            : m_table(table)
-            , m_ptr(ptr)
-            , m_index(index) {
+        iterator(handle_table& table, std::shared_ptr<value_type>* ptr, size_t index);
 
-            if (!m_ptr[m_index] && m_index < capacity) {
-                iterate_to_next_element();
-            }
-        }
+        std::pair<handle_raw, reference> operator*() const;
 
-        std::pair<handle_raw, reference> operator*() const {
-            handle handle(m_table.m_parent, m_table.m_type, m_index);
-            auto data = m_ptr[m_index].get();
-            return {handle.raw(), *data};
-        }
+        iterator& operator++();
+        iterator operator++(int);
 
-        iterator& operator++() {
-            iterate_to_next_element();
-            return *this;
-        }
-
-        iterator operator++(int) {
-            iterator tmp = *this;
-            ++(*this);
-            return tmp;
-        }
-
-        friend bool operator== (const iterator& a, const iterator& b) {
-            return a.m_index == b.m_index;
-        }
-        friend bool operator!= (const iterator& a, const iterator& b) {
-            return a.m_index != b.m_index;
-        }
+        friend bool operator== (const iterator& a, const iterator& b);
+        friend bool operator!= (const iterator& a, const iterator& b);
 
     private:
-        void iterate_to_next_element() {
-            do {
-                m_index++;
-            } while (!m_ptr[m_index] && m_index < capacity);
-        }
+        void iterate_to_next_element();
 
         handle_table& m_table;
         std::shared_ptr<value_type>* m_ptr;
@@ -290,6 +262,57 @@ handles::handle handle_table<type_, capacity_>::valid_handle_for_us(const handle
     }
 
     return handle;
+}
+
+template<typename type_, size_t capacity_>
+handle_table<type_, capacity_>::iterator::iterator(
+    handle_table& table,
+    std::shared_ptr<value_type>* ptr,
+    const size_t index)
+    : m_table(table)
+    , m_ptr(ptr)
+    , m_index(index) {
+
+    if (!m_ptr[m_index] && m_index < capacity) {
+        iterate_to_next_element();
+    }
+}
+
+template<typename type_, size_t capacity_>
+std::pair<handle_raw, typename handle_table<type_, capacity_>::iterator::reference> handle_table<type_, capacity_>::iterator::operator*() const {
+    const handle handle(m_table.m_parent, m_table.m_type, m_index);
+    auto data = m_ptr[m_index].get();
+    return {handle.raw(), *data};
+}
+
+template<typename type_, size_t capacity_>
+handle_table<type_, capacity_>::iterator& handle_table<type_, capacity_>::iterator::operator++() {
+    iterate_to_next_element();
+    return *this;
+}
+
+template<typename type_, size_t capacity_>
+handle_table<type_, capacity_>::iterator handle_table<type_, capacity_>::iterator::operator++(int) {
+    iterator tmp = *this;
+    ++(*this);
+    return tmp;
+}
+
+template<typename type_, size_t capacity_>
+bool operator== (const typename handle_table<type_, capacity_>::iterator& a, const typename handle_table<type_, capacity_>::iterator& b) {
+    return a.m_index == b.m_index;
+}
+
+template<typename type_, size_t capacity_>
+bool operator!= (const typename handle_table<type_, capacity_>::iterator& a, const typename handle_table<type_, capacity_>::iterator& b) {
+    return a.m_index != b.m_index;
+}
+
+template<typename type_, size_t capacity_>
+void handle_table<type_, capacity_>::iterator::iterate_to_next_element() {
+    do {
+        m_index++;
+    } while (!m_ptr[m_index] && m_index < capacity);
 }
 
 }

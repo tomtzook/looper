@@ -129,11 +129,11 @@ void tcp::on_connect_done(std::unique_lock<std::mutex>& lock, stream::control& s
         stream_control.state.set_read_enabled(true);
         stream_control.state.set_write_enabled(true);
 
-        invoke_func<>(lock, "tcp_loop_callback", m_connect_callback, m_stream.loop_handle(), m_stream.handle(), error);
+        invoke_func<>(lock, "tcp_loop_callback", m_connect_callback, m_stream.handle(), error);
     } else {
         stream_control.state.mark_errored();
         looper_trace_error(log_module, "tcp connection failed: handle=%lu, code=0x%x", m_stream.handle(), error);
-        invoke_func<>(lock, "tcp_loop_callback", m_connect_callback, m_stream.loop_handle(), m_stream.handle(), error);
+        invoke_func<>(lock, "tcp_loop_callback", m_connect_callback, m_stream.handle(), error);
     }
 }
 
@@ -176,16 +176,10 @@ void tcp_server::listen(const size_t backlog, tcp_server_callback&& callback) {
 }
 
 std::unique_ptr<tcp> tcp_server::accept(looper::handle handle) {
-    auto [lock, control] = m_resource.lock_loop();
-
-    // unlock for the duration of the accept process
-    lock.unlock();
     os::tcp::tcp* tcp_struct;
     OS_CHECK_THROW(os::tcp::accept(m_socket_obj.get(), &tcp_struct));
     auto socket = os::make_tcp(tcp_struct);
 
-    // lock for the creation of the new client looper object
-    lock.lock();
     return std::make_unique<tcp>(handle, m_context, std::move(socket));
 }
 
@@ -202,7 +196,7 @@ void tcp_server::close() {
 void tcp_server::handle_events(std::unique_lock<std::mutex>& lock, looper_resource::control& control, const event_types events) {
     if ((events & event_in) != 0) {
         // new data
-        invoke_func(lock, "tcp_server_callback", m_callback, m_context->handle, m_handle);
+        invoke_func(lock, "tcp_server_callback", m_callback, m_handle);
     }
 }
 

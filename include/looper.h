@@ -10,6 +10,7 @@ namespace looper {
 
 loop create();
 void destroy(loop loop);
+loop get_parent_loop(handle handle);
 
 void run_once(loop loop);
 void run_forever(loop loop);

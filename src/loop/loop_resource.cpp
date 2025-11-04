@@ -59,10 +59,6 @@ looper_resource::control::control(loop_context* context, looper::impl::resource&
     , m_resource(resource)
 {}
 
-looper_resource::control::~control() {
-    detach_from_loop();
-}
-
 looper::loop looper_resource::control::loop_handle() const {
     return m_context->handle;
 }
@@ -103,6 +99,11 @@ looper_resource::looper_resource(loop_context* context)
     : m_context(context)
     , m_resource(empty_handle)
 {}
+
+looper_resource::~looper_resource() {
+    auto [lock, control] = lock_loop();
+    control.detach_from_loop();
+}
 
 looper::loop looper_resource::loop_handle() const {
     return m_context->handle;

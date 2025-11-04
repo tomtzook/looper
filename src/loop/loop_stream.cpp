@@ -28,7 +28,6 @@ stream::stream(const looper::handle handle, loop_context* context,
     , m_user_read_callback(nullptr)
     , m_write_requests()
     , m_completed_write_requests()
-    , m_reading(false)
     , m_write_pending(false) {
     auto [lock, control] = m_resource.lock_loop();
     control.attach_to_loop(os_descriptor, 0, std::bind_front(&stream::handle_events, this));
@@ -59,20 +58,20 @@ void stream::start_read(read_callback&& callback) {
     looper_trace_info(log_module, "stream starting read: handle=%lu", m_handle);
 
     m_user_read_callback = callback;
+    m_state.set_reading(true);
     control.request_events(event_in, events_update_type::append);
-    m_reading = true;
 }
 
 void stream::stop_read() {
     auto [lock, control] = use();
 
-    if (!m_reading) {
+    if (!m_state.is_reading()) {
         return;
     }
 
     looper_trace_info(log_module, "stream stopping read: handle=%lu", m_handle);
 
-    m_reading = false;
+    m_state.set_reading(false);
     control.request_events(event_in, events_update_type::remove);
 }
 
@@ -129,7 +128,7 @@ void stream::handle_read(std::unique_lock<std::mutex>& lock, looper_resource::co
     }
 
     // todo: call this via context?
-    invoke_func<>(lock, "stream_loop_callback", m_user_read_callback, control.loop_handle(), m_handle, data, error);
+    invoke_func<>(lock, "stream_loop_callback", m_user_read_callback, m_handle, data, error);
 }
 
 void stream::handle_write(std::unique_lock<std::mutex>& lock, looper_resource::control& control) {
@@ -149,15 +148,13 @@ void stream::handle_write(std::unique_lock<std::mutex>& lock, looper_resource::c
         }
     }
 
-    report_write_requests_finished(lock, control);
+    report_write_requests_finished(lock);
 }
 
-void stream::report_write_requests_finished(
-    std::unique_lock<std::mutex>& lock,
-    const looper_resource::control& control) {
+void stream::report_write_requests_finished(std::unique_lock<std::mutex>& lock) {
     while (!m_completed_write_requests.empty()) {
         auto& request = m_completed_write_requests.front();
-        invoke_func<>(lock, "stream_loop_callback", request.write_callback, control.loop_handle(), m_handle, request.error);
+        invoke_func<>(lock, "stream_loop_callback", request.write_callback, m_handle, request.error);
 
         m_completed_write_requests.pop_front();
     }

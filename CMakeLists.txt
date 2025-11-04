@@ -91,3 +91,5 @@ install(EXPORT looper
 add_executable(test_client
         test_client1.cpp)
 target_link_libraries(test_client looper)
+add_executable(test_server test_server1.cpp)
+target_link_libraries(test_server looper)

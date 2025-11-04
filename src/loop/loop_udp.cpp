@@ -122,7 +122,7 @@ void udp::handle_read(std::unique_lock<std::mutex>& lock, looper_resource::contr
     }
 
     invoke_func<>(lock, "udp_loop_callback", m_read_callback,
-        control.loop_handle(), m_handle,
+        m_handle,
         inet_address_view{std::string_view(ip_buff), port}, data, error);
 }
 
@@ -143,13 +143,13 @@ void udp::handle_write(std::unique_lock<std::mutex>& lock, looper_resource::cont
         }
     }
 
-    report_write_requests_finished(lock, control);
+    report_write_requests_finished(lock);
 }
 
-void udp::report_write_requests_finished(std::unique_lock<std::mutex>& lock, looper_resource::control& control) {
+void udp::report_write_requests_finished(std::unique_lock<std::mutex>& lock) {
     while (!m_completed_write_requests.empty()) {
         auto& request = m_completed_write_requests.front();
-        invoke_func<>(lock, "udp_loop_callback", request.write_callback, control.loop_handle(),
+        invoke_func<>(lock, "udp_loop_callback", request.write_callback,
             m_handle, request.error);
 
         m_completed_write_requests.pop_front();

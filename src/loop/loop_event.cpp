@@ -26,7 +26,7 @@ void event::clear() {
 }
 
 void event::handle_events(std::unique_lock<std::mutex>& lock, const looper_resource::control& control, event_types) const {
-    invoke_func(lock, "event_callback", m_callback, control.loop_handle(), m_handle);
+    invoke_func(lock, "event_callback", m_callback, m_handle);
 }
 
 }
