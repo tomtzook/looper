@@ -5,7 +5,7 @@
 
 namespace looper::impl {
 
-class udp final : looper_resource {
+class udp final {
 public:
     struct write_request {
         std::unique_ptr<uint8_t[]> buffer;
@@ -18,7 +18,7 @@ public:
         looper::error error;
     };
 
-    udp(looper::udp handle, loop_context *context);
+    udp(looper::udp handle, loop_context* context);
 
     void bind(uint16_t port);
     void bind(std::string_view address, uint16_t port);
@@ -29,29 +29,22 @@ public:
 
     void close();
 
-protected:
-    void handle_events(std::unique_lock<std::mutex>& lock, event_types events) override;
-
 private:
-    void handle_read(std::unique_lock<std::mutex>& lock);
-    void handle_write(std::unique_lock<std::mutex>& lock);
-    void report_write_requests_finished(std::unique_lock<std::mutex>& lock);
+    void handle_events(std::unique_lock<std::mutex>& lock, looper_resource::control& control, event_types events);
+    void handle_read(std::unique_lock<std::mutex>& lock, looper_resource::control& control);
+    void handle_write(std::unique_lock<std::mutex>& lock, looper_resource::control& control);
+    void report_write_requests_finished(std::unique_lock<std::mutex>& lock, looper_resource::control& control);
     bool do_write();
-
-    bool is_errored() const;
-    void mark_errored();
-    void verify_not_errored() const;
 
     looper::udp m_handle;
     os::udp_ptr m_socket_obj;
+    looper_resource m_resource;
+    resource_state m_state;
+    bool m_write_pending;
 
     udp_read_callback m_read_callback;
     std::deque<write_request> m_write_requests;
     std::deque<write_request> m_completed_write_requests;
-
-    bool m_is_errored;
-    bool m_reading;
-    bool m_write_pending;
 };
 
 }

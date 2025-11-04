@@ -7,155 +7,150 @@ namespace looper::impl {
 #define log_module loop_log_module "_udp"
 
 udp::udp(const looper::udp handle, loop_context *context)
-    : looper_resource(context)
-    , m_handle(handle)
+    : m_handle(handle)
     , m_socket_obj(os::make_udp())
+    , m_resource(context)
+    , m_state()
+    , m_write_pending(false)
     , m_read_callback()
     , m_write_requests()
-    , m_completed_write_requests()
-    , m_is_errored(false)
-    , m_reading(false)
-    , m_write_pending(false){
-    std::unique_lock lock(m_context->mutex);
-    attach_to_loop(os::udp::get_descriptor(m_socket_obj.get()), 0);
+    , m_completed_write_requests() {
+    auto [lock, control] = m_resource.lock_loop();
+    control.attach_to_loop(os::udp::get_descriptor(m_socket_obj.get()), 0,
+        std::bind_front(&udp::handle_events, this));
 }
 
 void udp::bind(const uint16_t port) {
-    std::unique_lock lock(m_context->mutex);
-
-    verify_not_errored();
+    auto [lock, control] = m_resource.lock_loop();
+    m_state.verify_not_errored();
 
     OS_CHECK_THROW(os::udp::bind(m_socket_obj.get(), port));
 }
 
 void udp::bind(const std::string_view address, const uint16_t port) {
-    std::unique_lock lock(m_context->mutex);
-
-    verify_not_errored();
+    auto [lock, control] = m_resource.lock_loop();
+    m_state.verify_not_errored();
 
     OS_CHECK_THROW(os::udp::bind(m_socket_obj.get(), address, port));
 }
 
 void udp::start_read(udp_read_callback&& callback) {
-    std::unique_lock lock(m_context->mutex);
-
-    if (m_reading) {
-        throw std::runtime_error("udp already reading");
-    }
-    if (m_is_errored) {
-        throw std::runtime_error("udp cannot read because it is errored");
-    }
+    auto [lock, control] = m_resource.lock_loop();
+    m_state.verify_not_errored();
+    m_state.verify_not_reading();
 
     looper_trace_info(log_module, "udp starting read: handle=%lu", m_handle);
 
     m_read_callback = callback;
-    request_events(event_in, events_update_type::append);
-    m_reading = true;
+    control.request_events(event_in, events_update_type::append);
+    m_state.set_reading(true);
 }
 
 void udp::stop_read() {
-    std::unique_lock lock(m_context->mutex);
+    auto [lock, control] = m_resource.lock_loop();
 
-    if (!m_reading) {
+    if (!m_state.is_reading()) {
         return;
     }
 
     looper_trace_info(log_module, "udp stopping read: handle=%lu", m_handle);
 
-    m_reading = false;
-    request_events(event_in, events_update_type::remove);
+    m_state.set_reading(false);
+    control.request_events(event_in, events_update_type::remove);
 }
 
 void udp::write(write_request&& request) {
-    std::unique_lock lock(m_context->mutex);
-
-    verify_not_errored();
+    auto [lock, control] = m_resource.lock_loop();
+    m_state.verify_not_errored();
 
     looper_trace_info(log_module, "udp writing: handle=%lu, buffer_size=%lu", m_handle, request.size);
 
     m_write_requests.push_back(std::move(request));
 
     if (!m_write_pending) {
-        request_events(event_out, events_update_type::append);
+        control.request_events(event_out, events_update_type::append);
         m_write_pending = true;
     }
 }
 
 void udp::close() {
-    std::unique_lock lock(m_context->mutex);
+    auto [lock, control] = m_resource.lock_loop();
 
     if (m_socket_obj) {
         m_socket_obj.reset();
     }
 
-    detach_from_loop();
+    control.detach_from_loop();
 }
 
-void udp::handle_events(std::unique_lock<std::mutex>& lock, const event_types events) {
+void udp::handle_events(std::unique_lock<std::mutex>& lock, looper_resource::control& control, const event_types events) {
     if ((events & event_in) != 0) {
         // new data
-        handle_read(lock);
+        handle_read(lock, control);
     }
 
     if ((events & event_out) != 0) {
-        handle_write(lock);
+        handle_write(lock, control);
     }
 }
 
-void udp::handle_read(std::unique_lock<std::mutex>& lock) {
-    if (!m_reading || m_is_errored) {
-        request_events(event_in, events_update_type::remove);
+void udp::handle_read(std::unique_lock<std::mutex>& lock, looper_resource::control& control) {
+    if (!m_state.is_reading() || m_state.is_errored()) {
+        control.request_events(event_in, events_update_type::remove);
         return;
     }
 
     char ip_buff[64]{};
     uint16_t port;
+    uint8_t read_buffer[1024]{};
     std::span<const uint8_t> data{};
     size_t read;
     const auto error = os::udp::read(
         m_socket_obj.get(),
-        m_context->read_buffer,
-        sizeof(m_context->read_buffer),
+        read_buffer,
+        sizeof(read_buffer),
         read,
         ip_buff,
         sizeof(ip_buff),
         port);
     if (error == error_success) {
-        data = std::span<const uint8_t>{m_context->read_buffer, read};
+        data = std::span<const uint8_t>{read_buffer, read};
         looper_trace_debug(log_module, "udp read new data: handle=%lu, data_size=%lu", m_handle, data.size());
     } else {
-        m_is_errored = true;
+        m_state.mark_errored();
         looper_trace_error(log_module, "udp read error: handle=%lu, code=%lu", m_handle, error);
     }
 
     invoke_func<>(lock, "udp_loop_callback", m_read_callback,
-        m_context->handle, m_handle, inet_address_view{std::string_view(ip_buff), port}, data, error);
+        control.loop_handle(), m_handle,
+        inet_address_view{std::string_view(ip_buff), port}, data, error);
 }
 
-void udp::handle_write(std::unique_lock<std::mutex>& lock) {
-    if (!m_write_pending || m_is_errored) {
-        request_events(event_out, events_update_type::remove);
+void udp::handle_write(std::unique_lock<std::mutex>& lock, looper_resource::control& control) {
+    if (!m_write_pending || m_state.is_errored()) {
+        control.request_events(event_out, events_update_type::remove);
         return;
     }
 
     if (!do_write()) {
-        m_is_errored = true;
+        m_state.mark_errored();
         m_write_pending = false;
-        request_events(event_out, events_update_type::remove);
+        control.request_events(event_out, events_update_type::remove);
     } else {
         if (m_write_requests.empty()) {
             m_write_pending = false;
-            request_events(event_out, events_update_type::remove);
+            control.request_events(event_out, events_update_type::remove);
         }
     }
 
-    report_write_requests_finished(lock);
+    report_write_requests_finished(lock, control);
 }
 
-void udp::report_write_requests_finished(std::unique_lock<std::mutex>& lock) {
+void udp::report_write_requests_finished(std::unique_lock<std::mutex>& lock, looper_resource::control& control) {
     while (!m_completed_write_requests.empty()) {
         auto& request = m_completed_write_requests.front();
-        invoke_func<>(lock, "udp_loop_callback", request.write_callback, m_context->handle, m_handle, request.error);
+        invoke_func<>(lock, "udp_loop_callback", request.write_callback, control.loop_handle(),
+            m_handle, request.error);
 
         m_completed_write_requests.pop_front();
     }
@@ -208,20 +203,6 @@ bool udp::do_write() {
     }
 
     return true;
-}
-
-bool udp::is_errored() const {
-    return m_is_errored;
-}
-
-void udp::mark_errored() {
-    m_is_errored = true;
-}
-
-void udp::verify_not_errored() const {
-    if (m_is_errored) {
-        throw std::runtime_error("udp is errored and cannot be used");
-    }
 }
 
 }

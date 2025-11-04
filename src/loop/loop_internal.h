@@ -7,11 +7,9 @@
 #include <condition_variable>
 #include <span>
 #include <chrono>
-#include <vector>
 #include <list>
 
 #include "looper_types.h"
-#include "looper_trace.h"
 
 #include "util/handles.h"
 #include "util/util.h"
@@ -24,7 +22,7 @@ namespace looper::impl {
 #define loop_log_module "loop"
 
 using resource = handle;
-using resource_callback = std::function<void(loop_context*, void*, event_types)>;
+using resource_callback = std::function<void(loop_context*, resource, void*, event_types)>;
 using loop_timer_callback = std::function<void()>;
 using loop_future_callback = std::function<void()>;
 
@@ -32,7 +30,6 @@ static constexpr size_t max_events_for_process = 20;
 static constexpr size_t initial_reserve_size = 20;
 static constexpr auto initial_poll_timeout = std::chrono::milliseconds(1000);
 static constexpr auto min_poll_timeout = std::chrono::milliseconds(100);
-static constexpr size_t read_buffer_size = 2048;
 static constexpr size_t resource_table_size = 256;
 
 enum class events_update_type {
@@ -53,7 +50,6 @@ struct timer_data {
     std::chrono::milliseconds next_timestamp;
     bool hit;
     loop_timer_callback callback;
-
 };
 
 struct future_data {
@@ -116,8 +112,6 @@ struct loop_context {
     std::list<future_data*> futures;
     std::list<timer_data*> timers;
     std::deque<update> updates;
-
-    uint8_t read_buffer[read_buffer_size];
 };
 
 std::chrono::milliseconds time_now();

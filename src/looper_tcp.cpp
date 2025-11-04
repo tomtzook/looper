@@ -93,7 +93,7 @@ void write_tcp(const tcp tcp, const std::span<const uint8_t> buffer, tcp_callbac
     auto& tcp_impl = data.m_tcps[tcp];
 
     const auto buffer_size = buffer.size_bytes();
-    impl::tcp::write_request request;
+    impl::stream::write_request request;
     request.buffer = std::unique_ptr<uint8_t[]>(new uint8_t[buffer_size]);
     request.pos = 0;
     request.size = buffer.size_bytes();

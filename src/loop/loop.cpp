@@ -9,11 +9,11 @@ namespace looper::impl {
 
 #define log_module loop_log_module
 
-static void run_signal_resource_handler(loop_context* context, void* data, event_types events) {
+static void run_signal_resource_handler(const loop_context* context, resource, void*, event_types) {
     os::event::clear(context->run_loop_event.get());
 }
 
-static void process_timers(loop_context* context, std::unique_lock<std::mutex>& lock) {
+static void process_timers(const loop_context* context, std::unique_lock<std::mutex>& lock) {
     std::vector<loop_timer_callback> to_call;
 
     const auto now = time_now();
@@ -35,7 +35,7 @@ static void process_timers(loop_context* context, std::unique_lock<std::mutex>& 
     lock.lock();
 }
 
-static void process_futures(loop_context* context, std::unique_lock<std::mutex>& lock) {
+static void process_futures(const loop_context* context, std::unique_lock<std::mutex>& lock) {
     std::vector<loop_future_callback> to_call;
 
     const auto now = time_now();

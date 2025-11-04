@@ -38,4 +38,34 @@ void start_timer(timer timer);
 void stop_timer(timer timer);
 void reset_timer(timer timer);
 
+// tcp
+tcp create_tcp(loop loop);
+void destroy_tcp(tcp tcp);
+
+void bind_tcp(tcp tcp, uint16_t port);
+void bind_tcp(tcp tcp, std::string_view address, uint16_t port);
+void connect_tcp(tcp tcp, std::string_view address, uint16_t port, tcp_callback&& callback);
+
+void start_tcp_read(tcp tcp, read_callback&& callback);
+void stop_tcp_read(tcp tcp);
+void write_tcp(tcp tcp, std::span<const uint8_t> buffer, write_callback&& callback);
+
+tcp_server create_tcp_server(loop loop);
+void destroy_tcp_server(tcp_server tcp);
+
+void bind_tcp_server(tcp_server tcp, std::string_view address, uint16_t port);
+void bind_tcp_server(tcp_server tcp, uint16_t port);
+void listen_tcp(tcp_server tcp, size_t backlog, tcp_server_callback&& callback);
+tcp accept_tcp(tcp_server tcp);
+
+// udp
+udp create_udp(loop loop);
+void destroy_udp(udp udp);
+
+void bind_udp(udp udp, uint16_t port);
+
+void start_udp_read(udp udp, udp_read_callback&& callback);
+void stop_udp_read(udp udp);
+void write_udp(udp udp, inet_address_view destination, std::span<const uint8_t> buffer, udp_callback&& callback);
+
 }

@@ -1,4 +1,5 @@
 
+#include "looper_trace.h"
 #include "loop_internal.h"
 
 namespace looper::impl {
@@ -17,7 +18,7 @@ static void process_update(loop_context* context, const update& update) {
     switch (update.type) {
         case update::type_add: {
             data.events = update.events | must_have_events;
-            auto status = os::poll::add(context->poller.get(), data.descriptor, data.events);
+            const auto status = os::poll::add(context->poller.get(), data.descriptor, data.events);
             if (status != error_success) {
                 looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
                 std::abort();
@@ -26,7 +27,7 @@ static void process_update(loop_context* context, const update& update) {
         }
         case update::type_new_events: {
             data.events = update.events | must_have_events;
-            auto status = os::poll::set(context->poller.get(), data.descriptor, data.events);
+            const auto status = os::poll::set(context->poller.get(), data.descriptor, data.events);
             if (status != error_success) {
                 looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
                 std::abort();
@@ -35,7 +36,7 @@ static void process_update(loop_context* context, const update& update) {
         }
         case update::type_new_events_add: {
             data.events |= update.events | must_have_events;
-            auto status = os::poll::set(context->poller.get(), data.descriptor, data.events);
+            const auto status = os::poll::set(context->poller.get(), data.descriptor, data.events);
             if (status != error_success) {
                 looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
                 std::abort();
@@ -45,7 +46,7 @@ static void process_update(loop_context* context, const update& update) {
         case update::type_new_events_remove: {
             data.events &= ~update.events;
             data.events |= must_have_events;
-            auto status = os::poll::set(context->poller.get(), data.descriptor, data.events);
+            const auto status = os::poll::set(context->poller.get(), data.descriptor, data.events);
             if (status != error_success) {
                 looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
                 std::abort();
@@ -69,8 +70,7 @@ loop_context::loop_context(const looper::loop handle)
         , descriptor_map()
         , futures()
         , timers()
-        , updates()
-        , read_buffer() {
+        , updates() {
     updates.resize(initial_reserve_size);
 }
 
@@ -86,7 +86,7 @@ void signal_run(loop_context* context) {
 
 void reset_smallest_timeout(loop_context* context) {
     std::chrono::milliseconds timeout = initial_poll_timeout;
-    for (auto* timer : context->timers) {
+    for (const auto* timer : context->timers) {
         if (timer->timeout < timeout) {
             timeout = timer->timeout;
         }
@@ -101,7 +101,7 @@ resource add_resource(
     const event_types events,
     resource_callback&& callback,
     void* user_ptr) {
-    auto it = context->descriptor_map.find(descriptor);
+    const auto it = context->descriptor_map.find(descriptor);
     if (it != context->descriptor_map.end()) {
         throw std::runtime_error("resource already added");
     }
@@ -124,8 +124,8 @@ resource add_resource(
     return handle;
 }
 
-void remove_resource(loop_context* context, resource resource) {
-    auto data = context->resource_table.release(resource);
+void remove_resource(loop_context* context, const resource resource) {
+    const auto data = context->resource_table.release(resource);
 
     looper_trace_debug(log_module, "removing resource: context=0x%x, handle=%lu", context, resource);
 
@@ -137,10 +137,10 @@ void remove_resource(loop_context* context, resource resource) {
 
 void request_resource_events(
     loop_context* context,
-    resource resource,
+    const resource resource,
     const event_types events,
     const events_update_type type) {
-    auto& data = context->resource_table[resource];
+    const auto& data = context->resource_table[resource];
 
     update::update_type update_type;
     switch (type) {
@@ -182,7 +182,7 @@ void process_events(loop_context* context, std::unique_lock<std::mutex>& lock, c
             // make sure to remove this fd, guess it somehow was left over
             looper_trace_debug(log_module, "resource received events, but isn't attached to anything: fd=%lu", event_data.descriptor);
 
-            auto status = os::poll::remove(context->poller.get(), event_data.descriptor);
+            const auto status = os::poll::remove(context->poller.get(), event_data.descriptor);
             if (status != error_success) {
                 looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
                 std::abort();
@@ -191,7 +191,7 @@ void process_events(loop_context* context, std::unique_lock<std::mutex>& lock, c
             continue;
         }
 
-        auto* resource_data = it->second;
+        const auto* resource_data = it->second;
 
         if ((event_data.events & (event_error | event_hung)) != 0) {
             // we got an error on the resource, push it into the resource handler by marking
@@ -199,7 +199,7 @@ void process_events(loop_context* context, std::unique_lock<std::mutex>& lock, c
             event_data.events |= resource_data->events & (event_out | event_in);
         }
 
-        auto adjusted_flags = (resource_data->events & event_data.events);
+        const auto adjusted_flags = (resource_data->events & event_data.events);
         if (adjusted_flags == 0) {
             continue;
         }
@@ -208,7 +208,7 @@ void process_events(loop_context* context, std::unique_lock<std::mutex>& lock, c
                            context, resource_data->our_handle, adjusted_flags);
 
         invoke_func(lock, "resource_callback",
-                    resource_data->callback, context, resource_data->user_ptr, adjusted_flags);
+                    resource_data->callback, context, resource_data->our_handle, resource_data->user_ptr, adjusted_flags);
     }
 }
 

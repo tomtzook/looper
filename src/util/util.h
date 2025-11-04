@@ -3,6 +3,8 @@
 #include <mutex>
 #include <functional>
 
+#include "looper_trace.h"
+
 namespace looper {
 
 #define cbinvoke_log_module "callback_invoke"

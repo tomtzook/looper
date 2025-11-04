@@ -5,8 +5,6 @@
 #include <cstring>
 
 #include <looper.h>
-#include <looper_tcp.h>
-#include <looper_udp.h>
 
 #include "util/handles.h"
 #include "util/util.h"
