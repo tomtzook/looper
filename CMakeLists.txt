@@ -56,6 +56,7 @@ set(SOURCES
         src/loop/loop_future.cpp
         src/looper_types.cpp
         src/util/handles.cpp
+        include/looper_cxx.hpp
 )
 
 if (UNIX)
@@ -87,9 +88,3 @@ install(EXPORT looper
         FILE looperConfig.cmake
         NAMESPACE looper::
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/looper")
-
-add_executable(test_client
-        test_client1.cpp)
-target_link_libraries(test_client looper)
-add_executable(test_server test_server1.cpp)
-target_link_libraries(test_server looper)
