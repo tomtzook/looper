@@ -100,30 +100,72 @@ using tcp_holder = handle_holder<tcp, tcp_closer>;
 using tcp_server_holder = handle_holder<tcp_server, tcp_server_closer>;
 using udp_holder = handle_holder<udp, udp_closer>;
 
+/**
+ * Calls looper::create to create a new loop and returns it in a holder.
+ * See the used function for more documentation.
+ *
+ * @return handle holder with new loop handle
+ */
 inline loop_holder make_loop() {
     return loop_holder(create());
 }
 
+/**
+ * Calls looper::create_future to create a new future and returns it in a holder.
+ * See the used function for more documentation.
+ *
+ * @return handle holder with new future handle
+ */
 inline future_holder make_future(const loop loop, future_callback&& callback) {
     return future_holder(create_future(loop, std::move(callback)));
 }
 
+/**
+ * Calls looper::create_event to create a new event and returns it in a holder.
+ * See the used function for more documentation.
+ *
+ * @return handle holder with new event handle
+ */
 inline event_holder make_event(const loop loop, event_callback&& callback) {
     return event_holder(create_event(loop, std::move(callback)));
 }
 
-inline timer_holder make_timer(const loop loop, std::chrono::milliseconds timeout, timer_callback&& callback) {
+/**
+ * Calls looper::create_timer to create a new timer and returns it in a holder.
+ * See the used function for more documentation.
+ *
+ * @return handle holder with new timer handle
+ */
+inline timer_holder make_timer(const loop loop, const std::chrono::milliseconds timeout, timer_callback&& callback) {
     return timer_holder(create_timer(loop, timeout, std::move(callback)));
 }
 
+/**
+ * Calls looper::create_tcp to create a new tcp and returns it in a holder.
+ * See the used function for more documentation.
+ *
+ * @return handle holder with new tcp handle
+ */
 inline tcp_holder make_tcp(const loop loop) {
     return tcp_holder(create_tcp(loop));
 }
 
+/**
+ * Calls looper::create_tcp_server to create a new tcp_server and returns it in a holder.
+ * See the used function for more documentation.
+ *
+ * @return handle holder with new tcp_server handle
+ */
 inline tcp_server_holder make_tcp_server(const loop loop) {
     return tcp_server_holder(create_tcp_server(loop));
 }
 
+/**
+ * Calls looper::create_udp to create a new udp and returns it in a holder.
+ * See the used function for more documentation.
+ *
+ * @return handle holder with new udp handle
+ */
 inline udp_holder make_udp(const loop loop) {
     return udp_holder(create_udp(loop));
 }

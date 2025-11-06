@@ -21,7 +21,10 @@ void timer::start() {
         throw std::runtime_error("timer timeout too small");
     }
 
-    m_running = true;
+    if (m_running) {
+        return;
+    }
+
     m_loop_data.timeout = m_timeout;
     m_loop_data.hit = false;
     m_loop_data.next_timestamp = time_now() + m_timeout;
@@ -30,20 +33,26 @@ void timer::start() {
     };
 
     m_loop->add_timer(&m_loop_data);
+    m_running = true;
 
     looper_trace_info(log_module, "starting timer: handle=%lu, next_time=%lu", m_handle, m_loop_data.next_timestamp.count());
 
     m_loop->set_timeout_if_smaller(m_timeout);
-
     m_loop->signal_run();
 }
 
 void timer::stop() {
     auto lock = m_loop->lock_loop();
 
+    if (!m_running) {
+        return;
+    }
+
     looper_trace_info(log_module, "removing timer: handle=%lu", m_handle);
 
     m_loop->remove_timer(&m_loop_data);
+    m_running = false;
+
     m_loop->reset_smallest_timeout();
 }
 
