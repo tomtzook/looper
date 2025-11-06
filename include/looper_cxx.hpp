@@ -14,6 +14,7 @@ concept handle_closer = requires(t_ t, handle_t_ handle) {
 
 template<handle_type t_, handle_closer<t_> closer_>
 struct handle_holder {
+    handle_holder() : m_handle(empty_handle) {}
     explicit handle_holder(t_ handle)
         : m_handle(handle)
     {}
