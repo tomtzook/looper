@@ -37,6 +37,11 @@ struct handle_holder {
         return *this;
     }
 
+    // ReSharper disable once CppNonExplicitConversionOperator
+    operator t_() const { // NOLINT(*-explicit-constructor)
+        return m_handle;
+    }
+
     [[nodiscard]] t_ handle() const {
         return m_handle;
     }
@@ -94,5 +99,33 @@ using timer_holder = handle_holder<timer, timer_closer>;
 using tcp_holder = handle_holder<tcp, tcp_closer>;
 using tcp_server_holder = handle_holder<tcp_server, tcp_server_closer>;
 using udp_holder = handle_holder<udp, udp_closer>;
+
+inline loop_holder make_loop() {
+    return loop_holder(create());
+}
+
+inline future_holder make_future(const loop loop, future_callback&& callback) {
+    return future_holder(create_future(loop, std::move(callback)));
+}
+
+inline event_holder make_event(const loop loop, event_callback&& callback) {
+    return event_holder(create_event(loop, std::move(callback)));
+}
+
+inline timer_holder make_timer(const loop loop, std::chrono::milliseconds timeout, timer_callback&& callback) {
+    return timer_holder(create_timer(loop, timeout, std::move(callback)));
+}
+
+inline tcp_holder make_tcp(const loop loop) {
+    return tcp_holder(create_tcp(loop));
+}
+
+inline tcp_server_holder make_tcp_server(const loop loop) {
+    return tcp_server_holder(create_tcp_server(loop));
+}
+
+inline udp_holder make_udp(const loop loop) {
+    return udp_holder(create_udp(loop));
+}
 
 }

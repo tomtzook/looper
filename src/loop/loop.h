@@ -21,12 +21,13 @@ namespace looper::impl {
 
 #define loop_log_module "loop"
 
-struct loop_context;
+class loop;
 
 using resource = handle;
-using resource_callback = std::function<void(loop_context*, resource, void*, event_types)>;
+using resource_callback = std::function<void(resource, void*, event_types)>;
 using loop_timer_callback = std::function<void()>;
 using loop_future_callback = std::function<void()>;
+using loop_ptr = std::shared_ptr<loop>;
 
 static constexpr size_t max_events_for_process = 20;
 static constexpr size_t initial_reserve_size = 20;
@@ -95,44 +96,66 @@ struct update {
     event_types events;
 };
 
-struct loop_context {
-    explicit loop_context(looper::loop handle);
-    ~loop_context();
+class loop {
+public:
+    explicit loop(looper::loop handle);
+    ~loop();
 
-    looper::loop handle;
-    std::mutex mutex;
-    os::poller_ptr poller;
-    std::chrono::milliseconds timeout;
-    os::event_ptr run_loop_event;
-    os::poll::event_data event_data[max_events_for_process];
+    loop(loop&) = delete;
+    loop(loop&&) = delete;
+    loop& operator=(loop&) = delete;
+    loop& operator=(loop&&) = delete;
 
-    bool stop;
-    bool executing;
-    std::condition_variable run_finished;
+    [[nodiscard]] looper::loop handle() const;
 
-    handles::handle_table<resource_data, resource_table_size> resource_table;
-    std::unordered_map<os::descriptor, resource_data*> descriptor_map;
-    std::list<future_data*> futures;
-    std::list<timer_data*> timers;
-    std::deque<update> updates;
+    std::unique_lock<std::mutex> lock_loop();
+
+    resource add_resource(os::descriptor descriptor,
+                          event_types events,
+                          resource_callback&& callback,
+                          void* user_ptr = nullptr);
+    void remove_resource(resource resource);
+    void request_resource_events(resource resource, event_types events, events_update_type type);
+
+    void add_future(future_data* data);
+    void remove_future(future_data* data);
+    void add_timer(timer_data* data);
+    void remove_timer(timer_data* data);
+
+    void set_timeout_if_smaller(std::chrono::milliseconds timeout);
+    void reset_smallest_timeout();
+    void signal_run();
+
+    // loop cannot be locked by current thread when this is called
+    bool run_once();
+
+private:
+    void process_timers(std::unique_lock<std::mutex>& lock) const;
+    void process_futures(std::unique_lock<std::mutex>& lock) const;
+    void process_update(const update& update);
+    void process_updates();
+    void process_events(std::unique_lock<std::mutex>& lock, size_t event_count);
+
+    std::pair<std::unique_lock<std::mutex>, bool> lock_if_needed();
+
+    looper::loop m_handle;
+    std::mutex m_mutex;
+    os::poller_ptr m_poller;
+    std::chrono::milliseconds m_timeout;
+    os::event_ptr m_run_loop_event;
+    os::poll::event_data m_event_data[max_events_for_process];
+
+    bool m_stop;
+    bool m_executing;
+    std::condition_variable m_run_finished;
+
+    handles::handle_table<resource_data, resource_table_size> m_resource_table;
+    std::unordered_map<os::descriptor, resource_data*> m_descriptor_map;
+    std::list<future_data*> m_futures;
+    std::list<timer_data*> m_timers;
+    std::deque<update> m_updates;
 };
 
 std::chrono::milliseconds time_now();
-void signal_run(loop_context* context);
-void reset_smallest_timeout(loop_context* context);
-
-resource add_resource(loop_context* context,
-                      os::descriptor descriptor,
-                      event_types events,
-                      resource_callback&& callback,
-                      void* user_ptr = nullptr);
-void remove_resource(loop_context* context, resource resource);
-void request_resource_events(loop_context* context, resource resource, event_types events,
-                             events_update_type type = events_update_type::override);
-
-void process_updates(loop_context* context);
-void process_events(loop_context* context, std::unique_lock<std::mutex>& lock, size_t event_count);
-
-bool run_once(loop_context* context);
 
 }

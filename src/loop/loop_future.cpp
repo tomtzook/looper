@@ -1,62 +1,63 @@
 
 #include "loop_future.h"
 
+#include <utility>
+
 namespace looper::impl {
 
 #define log_module loop_log_module "_future"
 
-future::future(const looper::future handle, loop_context* context, future_callback&& callback)
+future::future(const looper::future handle, loop_ptr loop, future_callback&& callback)
     : m_handle(handle)
-    , m_context(context)
+    , m_loop(std::move(loop))
     , m_callback(std::move(callback))
     , m_exec_finished()
-    , m_context_data()
+    , m_loop_data()
 {}
 
 future::~future() {
-    std::unique_lock lock(m_context->mutex);
-    m_context->futures.remove(&m_context_data);
+    auto lock = m_loop->lock_loop();
+    m_loop->remove_future(&m_loop_data);
 }
 
 void future::execute(const std::chrono::milliseconds delay) {
-    std::unique_lock lock(m_context->mutex);
+    auto lock = m_loop->lock_loop();
 
-    if (!m_context_data.finished) {
+    if (!m_loop_data.finished) {
         throw std::runtime_error("future already queued for execution");
     }
 
-    m_context_data.finished = false;
-    m_context_data.execute_time = time_now() + delay;
-    m_context_data.callback = [this]()->void {
+    m_loop_data.finished = false;
+    m_loop_data.execute_time = time_now() + delay;
+    m_loop_data.callback = [this]()->void {
         handle_events();
     };
 
-    looper_trace_info(log_module, "queueing future: handle=%lu, run_at=%lu", m_handle, m_context_data.execute_time.count());
+    looper_trace_info(log_module, "queueing future: handle=%lu, run_at=%lu", m_handle, m_loop_data.execute_time.count());
 
-    m_context->futures.push_back(&m_context_data);
+    m_loop->add_future(&m_loop_data);
     if (delay.count() < 1) {
-        signal_run(m_context);
+        m_loop->signal_run();
     }
 }
 
 bool future::wait_for(std::unique_lock<std::mutex>& lock, const std::chrono::milliseconds timeout) {
-    if (m_context_data.finished) {
-        looper_trace_debug(log_module, "future already finished, not waiting: loop=%lu, handle=%lu", m_context->handle, m_handle);
+    if (m_loop_data.finished) {
+        looper_trace_debug(log_module, "future already finished, not waiting: loop=%lu, handle=%lu", m_loop->handle(), m_handle);
         return false;
     }
 
-    looper_trace_info(log_module, "waiting on future: loop=%lu, handle=%lu, timeout=%lu", m_context->handle, m_handle, timeout.count());
+    looper_trace_info(log_module, "waiting on future: loop=%lu, handle=%lu, timeout=%lu", m_loop->handle(), m_handle, timeout.count());
 
     return !m_exec_finished.wait_for(lock, timeout, [this]()->bool {
-        return m_context_data.finished;
+        return m_loop_data.finished;
     });
 }
 
-
 void future::handle_events() {
-    std::unique_lock lock(m_context->mutex);
+    auto lock = m_loop->lock_loop();
 
-    m_context->futures.remove(&m_context_data);
+    m_loop->remove_future(&m_loop_data);
     m_exec_finished.notify_all();
 
     invoke_func(lock, "future_callback", m_callback, m_handle);

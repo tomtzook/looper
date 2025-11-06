@@ -67,7 +67,7 @@ __attribute__((destructor())) void destruct_trace()  {
 #endif
 }
 
-bool can_log(log_level level) {
+bool can_log(const log_level level) {
     return level >= s_base_level;
 }
 

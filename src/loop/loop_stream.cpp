@@ -7,7 +7,7 @@ namespace looper::impl {
 
 #define log_module loop_log_module "_stream"
 
-stream::control::control(resource_state& state, const looper_resource::control& resource_control)
+stream::control::control(resource_state& state, const loop_resource::control& resource_control)
     : state(state)
     , m_resource_control(resource_control)
 {}
@@ -16,11 +16,11 @@ void stream::control::request_events(const event_types events, const events_upda
     m_resource_control.request_events(events, type);
 }
 
-stream::stream(const looper::handle handle, loop_context* context,
+stream::stream(const looper::handle handle, const loop_ptr& loop,
     read_from_obj&& read_from_obj, write_to_obj&& write_to_obj,
     const os::descriptor os_descriptor, handle_events_ext_func&& handle_events_ext)
     : m_handle(handle)
-    , m_resource(context)
+    , m_resource(loop)
     , m_state()
     , m_read_from_obj(read_from_obj)
     , m_write_to_obj(write_to_obj)
@@ -31,10 +31,6 @@ stream::stream(const looper::handle handle, loop_context* context,
     , m_write_pending(false) {
     auto [lock, control] = m_resource.lock_loop();
     control.attach_to_loop(os_descriptor, 0, std::bind_front(&stream::handle_events, this));
-}
-
-looper::loop stream::loop_handle() const {
-    return m_resource.loop_handle();
 }
 
 looper::handle stream::handle() const {
@@ -93,7 +89,7 @@ void stream::write(write_request&& request) {
     }
 }
 
-void stream::handle_events(std::unique_lock<std::mutex>& lock, looper_resource::control& control, const event_types events) {
+void stream::handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control& control, const event_types events) {
     struct control our_control(m_state, control);
     if (m_handle_events_ext_func(lock, our_control, events)) {
         return;
@@ -109,7 +105,7 @@ void stream::handle_events(std::unique_lock<std::mutex>& lock, looper_resource::
     }
 }
 
-void stream::handle_read(std::unique_lock<std::mutex>& lock, looper_resource::control& control) {
+void stream::handle_read(std::unique_lock<std::mutex>& lock, loop_resource::control& control) {
     if (!m_state.is_reading() || m_state.is_errored() || !m_state.can_read()) {
         control.request_events(event_in, events_update_type::remove);
         return;
@@ -131,7 +127,7 @@ void stream::handle_read(std::unique_lock<std::mutex>& lock, looper_resource::co
     invoke_func<>(lock, "stream_loop_callback", m_user_read_callback, m_handle, data, error);
 }
 
-void stream::handle_write(std::unique_lock<std::mutex>& lock, looper_resource::control& control) {
+void stream::handle_write(std::unique_lock<std::mutex>& lock, loop_resource::control& control) {
     if (!m_write_pending || m_state.is_errored() || !m_state.can_write()) {
         control.request_events(event_out, events_update_type::remove);
         return;

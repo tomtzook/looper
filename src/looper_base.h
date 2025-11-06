@@ -27,7 +27,7 @@ static constexpr size_t loops_count = 8;
 struct loop_data {
     explicit loop_data(const loop handle)
         : m_handle(handle)
-        , m_context(std::make_shared<impl::loop_context>(handle))
+        , m_loop(std::make_shared<impl::loop>(handle))
         , m_closing(false)
         , m_thread(nullptr)
         , m_events(handles::handle{handle}.index(), handles::type_event)
@@ -61,11 +61,11 @@ struct loop_data {
         m_udps.clear();
 
         // todo: use the context as shared ptr everywhere
-        m_context.reset();
+        m_loop.reset();
     }
 
     loop m_handle;
-    std::shared_ptr<impl::loop_context> m_context;
+    impl::loop_ptr m_loop;
     bool m_closing;
 
     std::unique_ptr<std::thread> m_thread;
@@ -89,14 +89,14 @@ struct looper_data {
     looper_data& operator=(looper_data&&) = delete;
 
     // todo: we use this mutex everywhere, could be problematic, limit use. perhaps remove lock from loop layer, how?
-    //  could use some lock-less mechanisms, or spinlocks
+    //  could use some lock-less mechanisms
     std::mutex m_mutex;
     handles::handle_table<loop_data, loops_count> m_loops;
 };
 
 looper_data& get_global_loop_data();
 
-static inline std::optional<loop_data*> try_get_loop(const loop loop) {
+static std::optional<loop_data*> try_get_loop(const loop loop) {
     if (!get_global_loop_data().m_loops.has(loop)) {
         return std::nullopt;
     }
@@ -109,7 +109,7 @@ static inline std::optional<loop_data*> try_get_loop(const loop loop) {
     return {&data};
 }
 
-static inline loop_data& get_loop(const loop loop) {
+static loop_data& get_loop(const loop loop) {
     auto& data = get_global_loop_data().m_loops[loop];
     if (data.m_closing) {
         throw loop_closing_exception(loop);
@@ -118,13 +118,13 @@ static inline loop_data& get_loop(const loop loop) {
     return data;
 }
 
-static inline loop get_loop_handle(const handle handle) {
+static loop get_loop_handle(const handle handle) {
     const handles::handle full(handle);
     const handles::handle loop(0, handles::type_loop, full.parent());
     return loop.raw();
 }
 
-static inline loop_data& get_loop_from_handle(const handle handle) {
+static loop_data& get_loop_from_handle(const handle handle) {
     const auto loop_handle = get_loop_handle(handle);
     return get_loop(loop_handle);
 }

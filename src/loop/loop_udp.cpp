@@ -6,10 +6,10 @@ namespace looper::impl {
 
 #define log_module loop_log_module "_udp"
 
-udp::udp(const looper::udp handle, loop_context *context)
+udp::udp(const looper::udp handle, const loop_ptr& loop)
     : m_handle(handle)
     , m_socket_obj(os::make_udp())
-    , m_resource(context)
+    , m_resource(loop)
     , m_state()
     , m_write_pending(false)
     , m_read_callback()
@@ -83,7 +83,7 @@ void udp::close() {
     control.detach_from_loop();
 }
 
-void udp::handle_events(std::unique_lock<std::mutex>& lock, looper_resource::control& control, const event_types events) {
+void udp::handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control& control, const event_types events) {
     if ((events & event_in) != 0) {
         // new data
         handle_read(lock, control);
@@ -94,7 +94,7 @@ void udp::handle_events(std::unique_lock<std::mutex>& lock, looper_resource::con
     }
 }
 
-void udp::handle_read(std::unique_lock<std::mutex>& lock, looper_resource::control& control) {
+void udp::handle_read(std::unique_lock<std::mutex>& lock, loop_resource::control& control) {
     if (!m_state.is_reading() || m_state.is_errored()) {
         control.request_events(event_in, events_update_type::remove);
         return;
@@ -126,7 +126,7 @@ void udp::handle_read(std::unique_lock<std::mutex>& lock, looper_resource::contr
         inet_address_view{std::string_view(ip_buff), port}, data, error);
 }
 
-void udp::handle_write(std::unique_lock<std::mutex>& lock, looper_resource::control& control) {
+void udp::handle_write(std::unique_lock<std::mutex>& lock, loop_resource::control& control) {
     if (!m_write_pending || m_state.is_errored()) {
         control.request_events(event_out, events_update_type::remove);
         return;

@@ -28,13 +28,12 @@ set(SOURCES
         include/looper_trace.h
         include/looper_types.h
         include/looper_except.h
+        include/looper_cxx.hpp
 
         src/util/util.h
         src/util/handles.h
         src/os/os.h
         src/os/factory.h
-        src/loop/loop_structs.h
-        src/loop/loop_internal.h
         src/loop/loop.h
         src/types_internal.h
         src/looper_base.h
@@ -44,7 +43,6 @@ set(SOURCES
         src/looper_udp.cpp
         src/trace.cpp
         src/loop/loop.cpp
-        src/loop/loop_base.cpp
         src/loop/loop_tcp.cpp
         src/loop/loop_udp.cpp
         src/loop/loop_stream.cpp
@@ -56,7 +54,6 @@ set(SOURCES
         src/loop/loop_future.cpp
         src/looper_types.cpp
         src/util/handles.cpp
-        include/looper_cxx.hpp
 )
 
 if (UNIX)

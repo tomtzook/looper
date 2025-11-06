@@ -4,7 +4,7 @@
 
 namespace looper {
 
-inet_address_view::inet_address_view(std::string_view ip, uint16_t port)
+inet_address_view::inet_address_view(const std::string_view ip, const uint16_t port)
     : ip(ip)
     , port(port)
 {}
@@ -20,7 +20,7 @@ inet_address_view& inet_address_view::operator=(const inet_address& other) {
     return *this;
 }
 
-inet_address::inet_address(std::string_view ip, uint16_t port)
+inet_address::inet_address(const std::string_view ip, const uint16_t port)
     : ip(ip)
     , port(port)
 {}

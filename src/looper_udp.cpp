@@ -10,7 +10,7 @@ udp create_udp(const loop loop) {
 
     auto& data = get_loop(loop);
 
-    auto [handle, udp_impl] = data.m_udps.allocate_new(data.m_context.get());
+    auto [handle, udp_impl] = data.m_udps.allocate_new(data.m_loop);
     looper_trace_info(log_module, "created new udp: loop=%lu, handle=%lu", data.m_handle, handle);
     data.m_udps.assign(handle, std::move(udp_impl));
 

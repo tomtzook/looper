@@ -18,7 +18,7 @@ public:
         looper::error error;
     };
 
-    udp(looper::udp handle, loop_context* context);
+    udp(looper::udp handle, const loop_ptr& loop);
 
     void bind(uint16_t port);
     void bind(std::string_view address, uint16_t port);
@@ -30,15 +30,15 @@ public:
     void close();
 
 private:
-    void handle_events(std::unique_lock<std::mutex>& lock, looper_resource::control& control, event_types events);
-    void handle_read(std::unique_lock<std::mutex>& lock, looper_resource::control& control);
-    void handle_write(std::unique_lock<std::mutex>& lock, looper_resource::control& control);
+    void handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control& control, event_types events);
+    void handle_read(std::unique_lock<std::mutex>& lock, loop_resource::control& control);
+    void handle_write(std::unique_lock<std::mutex>& lock, loop_resource::control& control);
     void report_write_requests_finished(std::unique_lock<std::mutex>& lock);
     bool do_write();
 
     looper::udp m_handle;
     os::udp_ptr m_socket_obj;
-    looper_resource m_resource;
+    loop_resource m_resource;
     resource_state m_state;
     bool m_write_pending;
 

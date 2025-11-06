@@ -6,7 +6,7 @@ namespace looper::impl {
 
 class timer final {
 public:
-    timer(looper::timer handle, loop_context* context, timer_callback&& callback, std::chrono::milliseconds timeout);
+    timer(looper::timer handle, loop_ptr loop, timer_callback&& callback, std::chrono::milliseconds timeout);
 
     void start();
     void stop();
@@ -16,13 +16,13 @@ private:
     void handle_events();
 
     looper::timer m_handle;
-    loop_context* m_context;
+    loop_ptr m_loop;
 
     bool m_running;
     std::chrono::milliseconds m_timeout;
     timer_callback m_callback;
 
-    timer_data m_context_data;
+    timer_data m_loop_data;
 };
 
 }

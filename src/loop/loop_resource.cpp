@@ -1,6 +1,8 @@
 
 #include "loop_resource.h"
 
+#include <utility>
+
 namespace looper::impl {
 
 resource_state::resource_state()
@@ -54,67 +56,61 @@ void resource_state::set_write_enabled(const bool enabled) {
     m_can_write = enabled;
 }
 
-looper_resource::control::control(loop_context* context, looper::impl::resource& resource)
-    : m_context(context)
+loop_resource::control::control(loop_ptr loop, looper::impl::resource& resource)
+    : m_loop(std::move(loop))
     , m_resource(resource)
 {}
 
-looper::loop looper_resource::control::loop_handle() const {
-    return m_context->handle;
-}
-
-looper::impl::resource looper_resource::control::handle() const {
+looper::impl::resource loop_resource::control::handle() const {
     return m_resource;
 }
 
-void looper_resource::control::attach_to_loop(const os::descriptor descriptor, const event_types events, handle_events_func&& handle_events) {
+void loop_resource::control::attach_to_loop(const os::descriptor descriptor, const event_types events, handle_events_func&& handle_events) {
     if (m_resource != empty_handle) {
         throw std::runtime_error("already attached as resource");
     }
 
-    m_resource = add_resource(m_context, descriptor, events, [handle_events](
-        loop_context* context, resource resource, void*, const event_types events_act)->void {
+    auto loop = m_loop;
+    m_resource = m_loop->add_resource(descriptor, events, [loop, handle_events](
+        resource resource, void*, const event_types events_act)->void {
         if (resource == empty_handle) {
             return;
         }
 
-        std::unique_lock lock(context->mutex);
-        control control(context, resource);
+        auto lock = loop->lock_loop();
+        control control(loop, resource);
         handle_events(lock, control, events_act);
     });
 }
 
-void looper_resource::control::detach_from_loop() {
+void loop_resource::control::detach_from_loop() {
     if (m_resource != empty_handle) {
-        remove_resource(m_context, m_resource);
+        m_loop->remove_resource(m_resource);
         m_resource = empty_handle;
     }
 }
 
-void looper_resource::control::request_events(const event_types events, const events_update_type type) const {
-    request_resource_events(m_context, m_resource, events, type);
+void loop_resource::control::request_events(const event_types events, const events_update_type type) const {
+    m_loop->request_resource_events(m_resource, events, type);
 }
 
-looper_resource::looper_resource(loop_context* context)
-    : m_context(context)
+loop_resource::loop_resource(loop_ptr loop)
+    : m_loop(std::move(loop))
     , m_resource(empty_handle)
 {}
 
-looper_resource::~looper_resource() {
+loop_resource::~loop_resource() {
     auto [lock, control] = lock_loop();
     control.detach_from_loop();
 }
 
-looper::loop looper_resource::loop_handle() const {
-    return m_context->handle;
-}
-
-looper::impl::resource looper_resource::handle() const {
+looper::impl::resource loop_resource::handle() const {
     return m_resource;
 }
 
-std::pair<std::unique_lock<std::mutex>, looper_resource::control> looper_resource::lock_loop() {
-    return {std::unique_lock(m_context->mutex), control(m_context, m_resource)};
+std::pair<std::unique_lock<std::mutex>, loop_resource::control> loop_resource::lock_loop() {
+    auto lock = m_loop->lock_loop();
+    return {std::move(lock), control(m_loop, m_resource)};
 }
 
 }

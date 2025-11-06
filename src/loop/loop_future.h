@@ -6,7 +6,7 @@ namespace looper::impl {
 
 class future final {
 public:
-    future(looper::future handle, loop_context* context, future_callback&& callback);
+    future(looper::future handle, loop_ptr loop, future_callback&& callback);
     ~future();
 
     void execute(std::chrono::milliseconds delay);
@@ -15,12 +15,12 @@ private:
     void handle_events();
 
     looper::future m_handle;
-    loop_context* m_context;
+    loop_ptr m_loop;
 
     future_callback m_callback;
     std::condition_variable m_exec_finished;
 
-    future_data m_context_data;
+    future_data m_loop_data;
 };
 
 }

@@ -35,15 +35,14 @@ private:
     bool m_can_write;
 };
 
-class looper_resource {
+class loop_resource {
 public:
     class control final {
     public:
         using handle_events_func = std::function<void(std::unique_lock<std::mutex>&, control&, event_types events)>;
 
-        control(loop_context* context, looper::impl::resource& resource);
+        control(loop_ptr loop, looper::impl::resource& resource);
 
-        [[nodiscard]] looper::loop loop_handle() const;
         [[nodiscard]] looper::impl::resource handle() const;
 
         void attach_to_loop(os::descriptor descriptor, event_types events, handle_events_func&& handle_events);
@@ -51,20 +50,19 @@ public:
         void request_events(event_types events, events_update_type type) const;
 
     private:
-        loop_context* m_context;
+        loop_ptr m_loop;
         looper::impl::resource& m_resource;
     };
 
-    explicit looper_resource(loop_context* context);
-    ~looper_resource();
+    explicit loop_resource(loop_ptr loop);
+    ~loop_resource();
 
-    [[nodiscard]] looper::loop loop_handle() const;
     [[nodiscard]] looper::impl::resource handle() const;
 
     std::pair<std::unique_lock<std::mutex>, control> lock_loop();
 
 private:
-    loop_context* m_context;
+    loop_ptr m_loop;
     looper::impl::resource m_resource;
 };
 

@@ -14,8 +14,8 @@ public:
         closed
     };
 
-    tcp(looper::tcp handle, loop_context* context);
-    tcp(looper::tcp handle, loop_context* context, os::tcp_ptr&& socket);
+    tcp(looper::tcp handle, const loop_ptr& loop);
+    tcp(looper::tcp handle, const loop_ptr& loop, os::tcp_ptr&& socket);
 
     [[nodiscard]] state get_state() const;
 
@@ -29,7 +29,7 @@ public:
     void write(stream::write_request&& request);
 
 private:
-    tcp(looper::tcp handle, loop_context* context, os::tcp_ptr&& socket, state state);
+    tcp(looper::tcp handle, const loop_ptr& loop, os::tcp_ptr&& socket, state state);
 
     bool handle_events(std::unique_lock<std::mutex>& lock, stream::control& stream_control, event_types events);
     void handle_connect(std::unique_lock<std::mutex>& lock, stream::control& stream_control);
@@ -46,7 +46,7 @@ private:
 
 class tcp_server final {
 public:
-    tcp_server(looper::tcp_server handle, loop_context* context);
+    tcp_server(looper::tcp_server handle, const loop_ptr& loop);
 
     void bind(uint16_t port);
     void bind(std::string_view address, uint16_t port);
@@ -57,11 +57,11 @@ public:
     void close();
 
 private:
-    void handle_events(std::unique_lock<std::mutex>& lock, looper_resource::control& control, event_types events);
+    void handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control& control, event_types events) const;
 
     looper::tcp_server m_handle;
-    loop_context* m_context;
-    looper_resource m_resource;
+    loop_ptr m_loop;
+    loop_resource m_resource;
     os::tcp_ptr m_socket_obj;
     tcp_server_callback m_callback;
 };

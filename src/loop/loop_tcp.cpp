@@ -9,20 +9,20 @@ namespace looper::impl {
 
 #define log_module loop_log_module "_tcp"
 
-tcp::tcp(const looper::tcp handle, loop_context* context)
-    : tcp(handle, context, os::make_tcp(), state::open) {
+tcp::tcp(const looper::tcp handle, const loop_ptr& loop)
+    : tcp(handle, loop, os::make_tcp(), state::open) {
 }
 
-tcp::tcp(const looper::tcp handle, loop_context* context, os::tcp_ptr&& socket)
-    : tcp(handle, context, std::move(socket), state::connected) {
+tcp::tcp(const looper::tcp handle, const loop_ptr& loop, os::tcp_ptr&& socket)
+    : tcp(handle, loop, std::move(socket), state::connected) {
     auto [lock, stream_control] = m_stream.use();
     stream_control.state.set_read_enabled(true);
     stream_control.state.set_write_enabled(true);
 }
 
-tcp::tcp(const looper::tcp handle, loop_context* context, os::tcp_ptr&& socket, const state state)
+tcp::tcp(const looper::tcp handle, const loop_ptr& loop, os::tcp_ptr&& socket, const state state)
     : m_socket_obj(std::move(socket))
-    , m_stream(handle, context,
+    , m_stream(handle, loop,
         std::bind_front(&tcp::read_from_obj, this), std::bind_front(&tcp::write_to_obj, this),
         os::tcp::get_descriptor(m_socket_obj.get()), std::bind_front(&tcp::handle_events, this))
     , m_state(state) {}
@@ -145,10 +145,10 @@ looper::error tcp::write_to_obj(const std::span<const uint8_t> buffer, size_t& w
     return os::tcp::write(m_socket_obj.get(), buffer.data(), buffer.size_bytes(), written_out);
 }
 
-tcp_server::tcp_server(const looper::tcp_server handle, loop_context* context)
+tcp_server::tcp_server(const looper::tcp_server handle, const loop_ptr& loop)
     : m_handle(handle)
-    , m_context(context)
-    , m_resource(context)
+    , m_loop(loop)
+    , m_resource(loop)
     , m_socket_obj(os::make_tcp())
     , m_callback(nullptr) {
     auto [lock, control] = m_resource.lock_loop();
@@ -180,7 +180,7 @@ std::unique_ptr<tcp> tcp_server::accept(looper::handle handle) {
     OS_CHECK_THROW(os::tcp::accept(m_socket_obj.get(), &tcp_struct));
     auto socket = os::make_tcp(tcp_struct);
 
-    return std::make_unique<tcp>(handle, m_context, std::move(socket));
+    return std::make_unique<tcp>(handle, m_loop, std::move(socket));
 }
 
 void tcp_server::close() {
@@ -193,7 +193,7 @@ void tcp_server::close() {
     control.detach_from_loop();
 }
 
-void tcp_server::handle_events(std::unique_lock<std::mutex>& lock, looper_resource::control& control, const event_types events) {
+void tcp_server::handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control& control, const event_types events) const {
     if ((events & event_in) != 0) {
         // new data
         invoke_func(lock, "tcp_server_callback", m_callback, m_handle);

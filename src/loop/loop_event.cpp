@@ -5,13 +5,15 @@ namespace looper::impl {
 
 #define log_module loop_log_module "_event"
 
-event::event(const looper::event handle, loop_context* context, event_callback&& callback)
+event::event(const looper::event handle, const loop_ptr& loop, event_callback&& callback)
     : m_handle(handle)
     , m_event_obj(os::make_event())
-    , m_resource(context)
+    , m_resource(loop)
     , m_callback(std::move(callback)) {
     auto [lock, control] = m_resource.lock_loop();
-    control.attach_to_loop(os::event::get_descriptor(m_event_obj.get()), event_in,
+    control.attach_to_loop(
+        os::event::get_descriptor(m_event_obj.get()),
+        event_in,
         std::bind_front(&event::handle_events, this));
 }
 
@@ -25,7 +27,7 @@ void event::clear() {
     OS_CHECK_THROW(os::event::clear(m_event_obj.get()));
 }
 
-void event::handle_events(std::unique_lock<std::mutex>& lock, const looper_resource::control& control, event_types) const {
+void event::handle_events(std::unique_lock<std::mutex>& lock, const loop_resource::control&, event_types) const {
     invoke_func(lock, "event_callback", m_callback, m_handle);
 }
 

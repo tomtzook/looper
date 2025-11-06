@@ -21,22 +21,21 @@ public:
 
     struct control {
     public:
-        control(resource_state& state, const looper_resource::control& resource_control);
+        control(resource_state& state, const loop_resource::control& resource_control);
 
         void request_events(event_types events, events_update_type type) const;
 
         resource_state& state;
     private:
-        looper_resource::control m_resource_control;
+        loop_resource::control m_resource_control;
     };
 
     using handle_events_ext_func = std::function<bool(std::unique_lock<std::mutex>&, control&, event_types)>;
 
-    stream(looper::handle handle, loop_context* context,
+    stream(looper::handle handle, const loop_ptr& loop,
         read_from_obj&& read_from_obj, write_to_obj&& write_to_obj,
         os::descriptor os_descriptor, handle_events_ext_func&& handle_events_ext);
 
-    [[nodiscard]] looper::loop loop_handle() const;
     [[nodiscard]] looper::handle handle() const;
 
     std::pair<std::unique_lock<std::mutex>, control> use();
@@ -46,14 +45,14 @@ public:
     void write(write_request&& request);
 
 private:
-    void handle_events(std::unique_lock<std::mutex>& lock, looper_resource::control& control, event_types events);
-    void handle_read(std::unique_lock<std::mutex>& lock, looper_resource::control& control);
-    void handle_write(std::unique_lock<std::mutex>& lock, looper_resource::control& control);
+    void handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control& control, event_types events);
+    void handle_read(std::unique_lock<std::mutex>& lock, loop_resource::control& control);
+    void handle_write(std::unique_lock<std::mutex>& lock, loop_resource::control& control);
     void report_write_requests_finished(std::unique_lock<std::mutex>& lock);
     bool do_write();
 
     looper::handle m_handle;
-    looper_resource m_resource;
+    loop_resource m_resource;
     resource_state m_state;
 
     read_from_obj m_read_from_obj;

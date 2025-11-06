@@ -43,8 +43,8 @@ using tcp_ptr = std::unique_ptr<tcp::tcp, tcp_deleter>;
 using udp_ptr = std::unique_ptr<udp::udp, udp_deleter>;
 using poller_ptr = std::unique_ptr<poll::poller, poller_deleter>;
 
-static inline event_ptr make_event() {
-    event::event* event;
+inline event_ptr make_event() {
+    os::event::event* event;
     const auto status = event::create(&event);
     if (status != error_success) {
         throw os_exception(status);
@@ -53,12 +53,12 @@ static inline event_ptr make_event() {
     return event_ptr(event);
 }
 
-static inline tcp_ptr make_tcp(tcp::tcp* tcp) {
+inline tcp_ptr make_tcp(tcp::tcp* tcp) {
     return tcp_ptr(tcp);
 }
 
-static inline tcp_ptr make_tcp() {
-    tcp::tcp* tcp;
+inline tcp_ptr make_tcp() {
+    os::tcp::tcp* tcp;
     const auto status = tcp::create(&tcp);
     if (status != error_success) {
         throw os_exception(status);
@@ -67,8 +67,8 @@ static inline tcp_ptr make_tcp() {
     return tcp_ptr(tcp);
 }
 
-static inline udp_ptr make_udp() {
-    udp::udp* udp;
+inline udp_ptr make_udp() {
+    os::udp::udp* udp;
     const auto status = udp::create(&udp);
     if (status != error_success) {
         throw os_exception(status);
@@ -77,8 +77,8 @@ static inline udp_ptr make_udp() {
     return udp_ptr(udp);
 }
 
-static inline poller_ptr make_poller() {
-    poll::poller* poller;
+inline poller_ptr make_poller() {
+    os::poll::poller* poller;
     const auto status = poll::create(&poller);
     if (status != error_success) {
         throw os_exception(status);
