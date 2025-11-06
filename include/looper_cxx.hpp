@@ -14,42 +14,79 @@ concept handle_closer = requires(t_ t, handle_t_ handle) {
 
 template<handle_type t_, handle_closer<t_> closer_>
 struct handle_holder {
-    handle_holder() : m_handle(empty_handle) {}
-    explicit handle_holder(t_ handle)
-        : m_handle(handle)
-    {}
-    ~handle_holder() {
-        if (m_handle != empty_handle) {
-            closer_()(m_handle);
-            m_handle = empty_handle;
-        }
-    }
+    handle_holder();
+    ~handle_holder();
 
     explicit handle_holder(handle_holder&) = delete;
     handle_holder& operator=(handle_holder&) = delete;
 
-    handle_holder(handle_holder&& other) noexcept
-        : m_handle(other.m_handle) {
-        other.m_handle = empty_handle;
-    }
-    handle_holder& operator=(handle_holder&& other) noexcept {
-        m_handle = other.m_handle;
-        other.m_handle = empty_handle;
-        return *this;
-    }
+    explicit handle_holder(t_ handle);
+    handle_holder& operator=(t_ handle) noexcept;
+    handle_holder(handle_holder&& other) noexcept;
+    handle_holder& operator=(handle_holder&& other) noexcept;
 
     // ReSharper disable once CppNonExplicitConversionOperator
-    operator t_() const { // NOLINT(*-explicit-constructor)
-        return m_handle;
-    }
+    operator t_() const; // NOLINT(*-explicit-constructor)
+    [[nodiscard]] t_ handle() const;
 
-    [[nodiscard]] t_ handle() const {
-        return m_handle;
-    }
+    void reset();
 
 private:
     t_ m_handle;
 };
+
+template<handle_type t_, handle_closer<t_> closer_>
+handle_holder<t_, closer_>::handle_holder()
+    : m_handle(empty_handle)
+{}
+
+template<handle_type t_, handle_closer<t_> closer_>
+handle_holder<t_, closer_>::~handle_holder() {
+    reset();
+}
+
+template<handle_type t_, handle_closer<t_> closer_>
+handle_holder<t_, closer_>::handle_holder(t_ handle)
+    : m_handle(handle)
+{}
+
+template<handle_type t_, handle_closer<t_> closer_>
+handle_holder<t_, closer_>& handle_holder<t_, closer_>::operator=(t_ handle) noexcept {
+    reset();
+    m_handle = handle;
+    return *this;
+}
+
+template<handle_type t_, handle_closer<t_> closer_>
+handle_holder<t_, closer_>::handle_holder(handle_holder&& other) noexcept
+    : m_handle(other.m_handle) {
+    other.m_handle = empty_handle;
+}
+
+template<handle_type t_, handle_closer<t_> closer_>
+handle_holder<t_, closer_>& handle_holder<t_, closer_>::operator=(handle_holder&& other) noexcept {
+    m_handle = other.m_handle;
+    other.m_handle = empty_handle;
+    return *this;
+}
+
+template<handle_type t_, handle_closer<t_> closer_>
+handle_holder<t_, closer_>::operator t_() const {
+    return m_handle;
+}
+
+template<handle_type t_, handle_closer<t_> closer_>
+t_ handle_holder<t_, closer_>::handle() const {
+    return m_handle;
+}
+
+template<handle_type t_, handle_closer<t_> closer_>
+void handle_holder<t_, closer_>::reset() {
+    if (m_handle != empty_handle) {
+        closer_()(m_handle);
+        m_handle = empty_handle;
+    }
+}
 
 struct loop_closer {
     void operator()(const loop loop) const {
