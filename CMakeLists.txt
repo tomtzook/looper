@@ -38,6 +38,7 @@ set(SOURCES
         src/types_internal.h
         src/looper_base.h
 
+        src/looper_base.cpp
         src/looper.cpp
         src/looper_tcp.cpp
         src/looper_udp.cpp

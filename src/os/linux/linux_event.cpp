@@ -23,12 +23,12 @@ struct event {
 
 looper::error create(event** event_out) {
     os::descriptor descriptor;
-    auto status = create_eventfd(descriptor);
+    const auto status = create_eventfd(descriptor);
     if (status != error_success) {
         return status;
     }
 
-    auto* _event = reinterpret_cast<event*>(malloc(sizeof(event)));
+    auto* _event = static_cast<event*>(malloc(sizeof(event)));
     if (_event == nullptr) {
         ::close(descriptor);
         return error_allocation;
@@ -46,11 +46,11 @@ void close(event* event) {
     free(event);
 }
 
-descriptor get_descriptor(event* event) {
+descriptor get_descriptor(const event* event) {
     return event->fd;
 }
 
-looper::error set(event* event) {
+looper::error set(const event* event) {
     if (::eventfd_write(event->fd, 1)) {
         return get_call_error();
     }
@@ -58,7 +58,7 @@ looper::error set(event* event) {
     return error_success;
 }
 
-looper::error clear(event* event) {
+looper::error clear(const event* event) {
     eventfd_t value;
     if (::eventfd_read(event->fd, &value)) {
         return get_call_error();

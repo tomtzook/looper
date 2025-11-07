@@ -25,63 +25,31 @@ static constexpr size_t handle_counts_per_type = 64;
 static constexpr size_t loops_count = 8;
 
 struct loop_data {
-    explicit loop_data(const loop handle)
-        : m_handle(handle)
-        , m_loop(std::make_shared<impl::loop>(handle))
-        , m_closing(false)
-        , m_thread(nullptr)
-        , m_events(handles::handle{handle}.index(), handles::type_event)
-        , m_timers(handles::handle{handle}.index(), handles::type_timer)
-        , m_futures(handles::handle{handle}.index(), handles::type_future)
-        , m_tcps(handles::handle{handle}.index(), handles::type_tcp)
-        , m_tcp_servers(handles::handle{handle}.index(), handles::type_tcp_server)
-        , m_udps(handles::handle{handle}.index(), handles::type_udp)
-    {}
-    ~loop_data() {
-        if (m_thread && m_thread->joinable()) {
-            m_thread->join();
-        }
-        m_thread.reset();
-
-        clear_context();
-    }
+    explicit loop_data(loop handle);
+    ~loop_data();
 
     loop_data(const loop_data&) = delete;
     loop_data(loop_data&&) = delete;
     loop_data& operator=(const loop_data&) = delete;
     loop_data& operator=(loop_data&&) = delete;
 
-    void clear_context() {
-        // must clear all handles first otherwise they cannot access the context.
-        m_events.clear();
-        m_timers.clear();
-        m_futures.clear();
-        m_tcps.clear();
-        m_tcp_servers.clear();
-        m_udps.clear();
+    void clear_context();
 
-        // todo: use the context as shared ptr everywhere
-        m_loop.reset();
-    }
+    loop handle;
+    impl::loop_ptr loop;
+    bool closing;
 
-    loop m_handle;
-    impl::loop_ptr m_loop;
-    bool m_closing;
-
-    std::unique_ptr<std::thread> m_thread;
-    handles::handle_table<impl::event, handle_counts_per_type> m_events;
-    handles::handle_table<impl::timer, handle_counts_per_type> m_timers;
-    handles::handle_table<impl::future, handle_counts_per_type> m_futures;
-    handles::handle_table<impl::tcp, handle_counts_per_type> m_tcps;
-    handles::handle_table<impl::tcp_server, handle_counts_per_type> m_tcp_servers;
-    handles::handle_table<impl::udp, handle_counts_per_type> m_udps;
+    std::unique_ptr<std::thread> thread;
+    handles::handle_table<impl::event, handle_counts_per_type> events;
+    handles::handle_table<impl::timer, handle_counts_per_type> timers;
+    handles::handle_table<impl::future, handle_counts_per_type> futures;
+    handles::handle_table<impl::tcp, handle_counts_per_type> tcps;
+    handles::handle_table<impl::tcp_server, handle_counts_per_type> tcp_servers;
+    handles::handle_table<impl::udp, handle_counts_per_type> udps;
 };
 
 struct looper_data {
-    looper_data()
-        : m_mutex()
-        , m_loops(0, handles::type_loop)
-    {}
+    looper_data();
 
     looper_data(const looper_data&) = delete;
     looper_data(looper_data&&) = delete;
@@ -90,43 +58,15 @@ struct looper_data {
 
     // todo: we use this mutex everywhere, could be problematic, limit use. perhaps remove lock from loop layer, how?
     //  could use some lock-less mechanisms
-    std::mutex m_mutex;
-    handles::handle_table<loop_data, loops_count> m_loops;
+    std::mutex mutex;
+    handles::handle_table<loop_data, loops_count> loops;
 };
 
 looper_data& get_global_loop_data();
 
-static std::optional<loop_data*> try_get_loop(const loop loop) {
-    if (!get_global_loop_data().m_loops.has(loop)) {
-        return std::nullopt;
-    }
-
-    auto& data = get_global_loop_data().m_loops[loop];
-    if (data.m_closing) {
-        return std::nullopt;
-    }
-
-    return {&data};
-}
-
-static loop_data& get_loop(const loop loop) {
-    auto& data = get_global_loop_data().m_loops[loop];
-    if (data.m_closing) {
-        throw loop_closing_exception(loop);
-    }
-
-    return data;
-}
-
-static loop get_loop_handle(const handle handle) {
-    const handles::handle full(handle);
-    const handles::handle loop(0, handles::type_loop, full.parent());
-    return loop.raw();
-}
-
-static loop_data& get_loop_from_handle(const handle handle) {
-    const auto loop_handle = get_loop_handle(handle);
-    return get_loop(loop_handle);
-}
+inline std::optional<loop_data*> try_get_loop(loop loop);
+inline loop_data& get_loop(loop loop);
+inline loop get_loop_handle(handle handle);
+inline loop_data& get_loop_from_handle(handle handle);
 
 }

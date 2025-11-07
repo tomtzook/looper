@@ -26,7 +26,7 @@ private:
 
 class no_space_exception final : public std::exception {
     [[nodiscard]] const char * what() const noexcept override {
-        return "no space more more data";
+        return "no space for more data";
     }
 };
 

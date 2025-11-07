@@ -4,7 +4,7 @@
 
 namespace looper::os {
 
-static inline looper::error os_error_to_looper(const int error) {
+static looper::error os_error_to_looper(const int error) {
     switch (error) {
         case 0:
             return error_success;
@@ -19,7 +19,7 @@ static inline looper::error os_error_to_looper(const int error) {
     }
 }
 
-static inline looper::error get_call_error() {
+static looper::error get_call_error() {
     const int code = errno;
     return os_error_to_looper(code);
 }

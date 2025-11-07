@@ -6,23 +6,27 @@
 
 namespace looper::os::file {
 
-static inline open_mode operator|(open_mode lhs, open_mode rhs) {
+static open_mode operator|(open_mode lhs, open_mode rhs) {
     return static_cast<open_mode>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
 }
-static inline open_mode operator&(open_mode lhs, open_mode rhs) {
+
+static open_mode operator&(open_mode lhs, open_mode rhs) {
     return static_cast<open_mode>(static_cast<uint32_t>(lhs) & static_cast<uint32_t>(rhs));
 }
-static inline bool operator!=(open_mode lhs, uint32_t rhs) {
+
+static bool operator!=(open_mode lhs, uint32_t rhs) {
     return static_cast<uint32_t>(lhs) != rhs;
 }
 
-static inline file_attributes operator|(file_attributes lhs, file_attributes rhs) {
+static file_attributes operator|(file_attributes lhs, file_attributes rhs) {
     return static_cast<file_attributes>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
 }
-static inline file_attributes operator&(file_attributes lhs, file_attributes rhs) {
+
+static file_attributes operator&(file_attributes lhs, file_attributes rhs) {
     return static_cast<file_attributes>(static_cast<uint32_t>(lhs) & static_cast<uint32_t>(rhs));
 }
-static inline bool operator!=(file_attributes lhs, uint32_t rhs) {
+
+static bool operator!=(file_attributes lhs, uint32_t rhs) {
     return static_cast<uint32_t>(lhs) != rhs;
 }
 
@@ -75,11 +79,15 @@ static looper::error get_open_flags(const open_mode mode, const file_attributes 
     return error_success;
 }
 
-static looper::error open_file(const std::string_view path, const open_mode mode, const file_attributes attributes, descriptor& descriptor_out) {
-    std::string path_c(path);
+static looper::error open_file(
+    const std::string_view path,
+    const open_mode mode,
+    const file_attributes attributes,
+    descriptor& descriptor_out) {
+    const std::string path_c(path);
 
     int open_flags;
-    auto status = get_open_flags(mode, attributes, open_flags);
+    const auto status = get_open_flags(mode, attributes, open_flags);
     if (status != error_success) {
         return status;
     }
@@ -94,9 +102,13 @@ static looper::error open_file(const std::string_view path, const open_mode mode
     return error_success;
 }
 
-looper::error create(file** file_out, const std::string_view path, const open_mode mode, const file_attributes attributes) {
+looper::error create(
+    file** file_out,
+    const std::string_view path,
+    const open_mode mode,
+    const file_attributes attributes) {
     os::descriptor descriptor;
-    auto status = open_file(path, mode, attributes, descriptor);
+    const auto status = open_file(path, mode, attributes, descriptor);
     if (status != error_success) {
         return status;
     }

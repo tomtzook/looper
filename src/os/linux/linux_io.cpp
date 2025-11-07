@@ -2,7 +2,11 @@
 
 namespace looper::os {
 
-looper::error io_read(const os::descriptor descriptor, uint8_t* buffer, const size_t buffer_size, size_t& read_out) {
+looper::error io_read(
+    const os::descriptor descriptor,
+    uint8_t* buffer,
+    const size_t buffer_size,
+    size_t& read_out) {
     if (buffer_size == 0) {
         read_out = 0;
         return error_success;
@@ -28,7 +32,11 @@ looper::error io_read(const os::descriptor descriptor, uint8_t* buffer, const si
     return error_success;
 }
 
-looper::error io_write(const os::descriptor descriptor, const uint8_t* buffer, const size_t size, size_t& written_out) {
+looper::error io_write(
+    const os::descriptor descriptor,
+    const uint8_t* buffer,
+    const size_t size,
+    size_t& written_out) {
     const auto result = ::write(descriptor, buffer, size);
     if (result < 0) {
         return get_call_error();

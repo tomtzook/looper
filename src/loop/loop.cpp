@@ -16,7 +16,7 @@ loop::loop(const looper::loop handle)
     , m_poller(os::make_poller())
     , m_timeout(initial_poll_timeout)
     , m_run_loop_event(os::make_event())
-    , m_event_data{}
+    , m_event_data()
     , m_stop(false)
     , m_executing(false)
     , m_run_finished()
@@ -27,10 +27,11 @@ loop::loop(const looper::loop handle)
     , m_updates() {
     m_updates.resize(initial_reserve_size);
 
-    looper_trace_info(log_module, "creating looper");
+    looper_trace_info(log_module, "creating loop: handle=%lu", m_handle);
 
     add_resource(os::event::get_descriptor(m_run_loop_event.get()),
-                 event_in, [this](resource, void*, event_types)->void {
+                 event_in,
+                 [this](resource, void*, event_types)->void {
                      os::event::clear(m_run_loop_event.get());
                  });
 }
@@ -78,7 +79,7 @@ resource loop::add_resource(
     data->events = 0;
     data->callback = std::move(callback);
 
-    looper_trace_debug(log_module, "adding resource: context=0x%x, handle=%lu, fd=%lu", this, handle, descriptor);
+    looper_trace_debug(log_module, "adding resource: loop=%lu, handle=%lu, fd=%lu", m_handle, handle, descriptor);
 
     auto [_2, data_ptr] = m_resource_table.assign(handle, std::move(data));
 
@@ -95,7 +96,7 @@ void loop::remove_resource(const resource resource) {
 
     const auto data = m_resource_table.release(resource);
 
-    looper_trace_debug(log_module, "removing resource: context=0x%x, handle=%lu", this, resource);
+    looper_trace_debug(log_module, "removing resource: loop=%lu, handle=%lu", m_handle, resource);
 
     m_descriptor_map.erase(data->descriptor);
     os::poll::remove(m_poller.get(), data->descriptor);
@@ -126,8 +127,8 @@ void loop::request_resource_events(
             throw std::runtime_error("unsupported event type");
     }
 
-    looper_trace_debug(log_module, "modifying resource events: context=0x%x, handle=%lu, type=%d, events=%lu",
-                       this, resource, static_cast<uint8_t>(update_type), events);
+    looper_trace_debug(log_module, "modifying resource events: loop=%lu, handle=%lu, type=%d, events=%lu",
+                       m_handle, resource, static_cast<uint8_t>(update_type), events);
 
     m_updates.push_back({data.our_handle, update_type, events});
     signal_run();
@@ -181,7 +182,7 @@ void loop::reset_smallest_timeout() {
 void loop::signal_run() {
     auto [lock, _] = lock_if_needed();
 
-    looper_trace_debug(log_module, "signalling loop run: context=0x%x", this);
+    looper_trace_debug(log_module, "signalling loop run: loop=%lu", m_handle);
     os::event::set(m_run_loop_event.get());
 }
 
@@ -363,8 +364,8 @@ void loop::process_events(std::unique_lock<std::mutex>& lock, const size_t event
             continue;
         }
 
-        looper_trace_debug(log_module, "resource has events: context=0x%x, handle=%lu, events=%lu",
-                           this, resource_data->our_handle, adjusted_flags);
+        looper_trace_debug(log_module, "resource has events: loop=%lu, handle=%lu, events=%lu",
+                           m_handle, resource_data->our_handle, adjusted_flags);
 
         invoke_func(lock, "resource_callback",
                     resource_data->callback, resource_data->our_handle, resource_data->user_ptr, adjusted_flags);

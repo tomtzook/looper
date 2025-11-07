@@ -44,7 +44,12 @@ static looper::error configure_blocking(const os::descriptor descriptor, const b
     return error_success;
 }
 
-static looper::error setoption(const os::descriptor descriptor, const int level, const int opt, const void* value, const size_t size) {
+static looper::error setoption(
+    const os::descriptor descriptor,
+    const int level,
+    const int opt,
+    const void* value,
+    const size_t size) {
     if (::setsockopt(descriptor, level, opt, value, size)) {
         return get_call_error();
     }
@@ -53,7 +58,7 @@ static looper::error setoption(const os::descriptor descriptor, const int level,
 }
 
 static looper::error set_default_options(const os::descriptor descriptor) {
-    int value = 1;
+    const int value = 1;
     auto status = setoption(descriptor, SOL_SOCKET, SO_REUSEPORT, &value, sizeof(value));
     if (status != error_success) {
         return status;
@@ -78,8 +83,8 @@ static looper::error get_socket_error(const os::descriptor descriptor, looper::e
     return error_success;
 }
 
-looper::error bind_socket_ipv4(os::descriptor descriptor, std::string_view ip, uint16_t port) {
-    std::string ip_c(ip);
+looper::error bind_socket_ipv4(const os::descriptor descriptor, const std::string_view ip, const uint16_t port) {
+    const std::string ip_c(ip);
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -93,7 +98,7 @@ looper::error bind_socket_ipv4(os::descriptor descriptor, std::string_view ip, u
     return error_success;
 }
 
-looper::error bind_socket_ipv4(os::descriptor descriptor, uint16_t port) {
+looper::error bind_socket_ipv4(const os::descriptor descriptor, const uint16_t port) {
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = ::htons(port);
@@ -154,15 +159,15 @@ void close(tcp* tcp) {
     free(tcp);
 }
 
-descriptor get_descriptor(tcp* tcp) {
+descriptor get_descriptor(const tcp* tcp) {
     return tcp->fd;
 }
 
-looper::error get_internal_error(tcp* tcp, looper::error& error_out) {
+looper::error get_internal_error(const tcp* tcp, looper::error& error_out) {
     return get_socket_error(tcp->fd, error_out);
 }
 
-looper::error bind(tcp* tcp, uint16_t port) {
+looper::error bind(const tcp* tcp, const uint16_t port) {
     if (tcp->closed) {
         return error_fd_closed;
     }
@@ -173,7 +178,7 @@ looper::error bind(tcp* tcp, uint16_t port) {
     return bind_socket_ipv4(tcp->fd, port);
 }
 
-looper::error bind(tcp* tcp, std::string_view ip, uint16_t port) {
+looper::error bind(const tcp* tcp, const std::string_view ip, const uint16_t port) {
     if (tcp->closed) {
         return error_fd_closed;
     }
@@ -184,7 +189,7 @@ looper::error bind(tcp* tcp, std::string_view ip, uint16_t port) {
     return bind_socket_ipv4(tcp->fd, ip, port);
 }
 
-looper::error connect(tcp* tcp, std::string_view ip, uint16_t port) {
+looper::error connect(tcp* tcp, const std::string_view ip, const uint16_t port) {
     if (tcp->closed) {
         return error_fd_closed;
     }
@@ -192,7 +197,7 @@ looper::error connect(tcp* tcp, std::string_view ip, uint16_t port) {
         return error_operation_not_supported;
     }
 
-    std::string ip_c(ip);
+    const std::string ip_c(ip);
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -223,7 +228,7 @@ looper::error finalize_connect(tcp* tcp) {
 
     // for non-blocking connect, we need to make sure it actually succeeded in the end.
     looper::error error;
-    auto status = get_internal_error(tcp, error);
+    const auto status = get_internal_error(tcp, error);
     if (status != error_success) {
         return status;
     }
@@ -234,7 +239,7 @@ looper::error finalize_connect(tcp* tcp) {
     return error_success;
 }
 
-looper::error read(tcp* tcp, uint8_t* buffer, size_t buffer_size, size_t& read_out) {
+looper::error read(const tcp* tcp, uint8_t* buffer, const size_t buffer_size, size_t& read_out) {
     if (tcp->closed) {
         return error_fd_closed;
     }
@@ -252,7 +257,7 @@ looper::error read(tcp* tcp, uint8_t* buffer, size_t buffer_size, size_t& read_o
     return error_success;
 }
 
-looper::error write(tcp* tcp, const uint8_t* buffer, size_t size, size_t& written_out) {
+looper::error write(const tcp* tcp, const uint8_t* buffer, const size_t size, size_t& written_out) {
     if (tcp->closed) {
         return error_fd_closed;
     }
@@ -270,7 +275,7 @@ looper::error write(tcp* tcp, const uint8_t* buffer, size_t size, size_t& writte
     return error_success;
 }
 
-looper::error listen(tcp* tcp, size_t backlog_size) {
+looper::error listen(const tcp* tcp, const size_t backlog_size) {
     if (tcp->closed) {
         return error_fd_closed;
     }
@@ -285,7 +290,7 @@ looper::error listen(tcp* tcp, size_t backlog_size) {
     return error_success;
 }
 
-looper::error accept(tcp* this_tcp, tcp** tcp_out) {
+looper::error accept(const tcp* this_tcp, tcp** tcp_out) {
     if (this_tcp->closed) {
         return error_fd_closed;
     }
@@ -301,13 +306,13 @@ looper::error accept(tcp* this_tcp, tcp** tcp_out) {
         return get_call_error();
     }
 
-    auto* _new_tcp = reinterpret_cast<tcp*>(malloc(sizeof(tcp)));
+    auto* _new_tcp = static_cast<tcp*>(malloc(sizeof(tcp)));
     if (_new_tcp == nullptr) {
         ::close(new_fd);
         return error_allocation;
     }
 
-    auto status = configure_blocking(new_fd, false);
+    const auto status = configure_blocking(new_fd, false);
     if (status != error_success) {
         ::close(new_fd);
         return status;
@@ -369,15 +374,15 @@ void close(udp* udp) {
     free(udp);
 }
 
-descriptor get_descriptor(udp* udp) {
+descriptor get_descriptor(const udp* udp) {
     return udp->fd;
 }
 
-looper::error get_internal_error(udp* udp, looper::error& error_out) {
+looper::error get_internal_error(const udp* udp, looper::error& error_out) {
     return get_socket_error(udp->fd, error_out);
 }
 
-looper::error bind(udp* udp, uint16_t port) {
+looper::error bind(const udp* udp, const uint16_t port) {
     if (udp->closed) {
         return error_fd_closed;
     }
@@ -385,7 +390,7 @@ looper::error bind(udp* udp, uint16_t port) {
     return bind_socket_ipv4(udp->fd, port);
 }
 
-looper::error bind(udp* udp, std::string_view ip, uint16_t port) {
+looper::error bind(const udp* udp, const std::string_view ip, const uint16_t port) {
     if (udp->closed) {
         return error_fd_closed;
     }
@@ -393,7 +398,14 @@ looper::error bind(udp* udp, std::string_view ip, uint16_t port) {
     return bind_socket_ipv4(udp->fd, ip, port);
 }
 
-looper::error read(udp* udp, uint8_t* buffer, size_t buffer_size, size_t& read_out, char* sender_ip_buff, size_t sender_ip_buff_size, uint16_t& sender_port_out) {
+looper::error read(
+    const udp* udp,
+    uint8_t* buffer,
+    const size_t buffer_size,
+    size_t& read_out,
+    char* sender_ip_buff,
+    const size_t sender_ip_buff_size,
+    uint16_t& sender_port_out) {
     if (udp->closed) {
         return error_fd_closed;
     }
@@ -405,7 +417,13 @@ looper::error read(udp* udp, uint8_t* buffer, size_t buffer_size, size_t& read_o
 
     sockaddr_in addr{};
     socklen_t addr_len = sizeof(addr);
-    const auto result = ::recvfrom(udp->fd, buffer, buffer_size, 0, reinterpret_cast<sockaddr*>(&addr), &addr_len);
+    const auto result = ::recvfrom(
+        udp->fd,
+        buffer,
+        buffer_size,
+        0,
+        reinterpret_cast<sockaddr*>(&addr),
+        &addr_len);
     if (result == 0) {
         return error_eof;
     }
@@ -428,19 +446,31 @@ looper::error read(udp* udp, uint8_t* buffer, size_t buffer_size, size_t& read_o
     return error_success;
 }
 
-looper::error write(udp* udp, std::string_view dest_ip, uint16_t dest_port, const uint8_t* buffer, size_t size, size_t& written_out) {
+looper::error write(
+    const udp* udp,
+    const std::string_view dest_ip,
+    const uint16_t dest_port,
+    const uint8_t* buffer,
+    const size_t size,
+    size_t& written_out) {
     if (udp->closed) {
         return error_fd_closed;
     }
 
-    std::string ip_c(dest_ip);
+    const std::string ip_c(dest_ip);
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = ::htons(dest_port);
     ::inet_pton(AF_INET, ip_c.c_str(), &addr.sin_addr);
 
-    const auto result = ::sendto(udp->fd, buffer, size, 0, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    const auto result = ::sendto(
+        udp->fd,
+        buffer,
+        size,
+        0,
+        reinterpret_cast<sockaddr*>(&addr),
+        sizeof(addr));
     if (result < 0) {
         return get_call_error();
     }
