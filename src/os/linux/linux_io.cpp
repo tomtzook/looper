@@ -1,6 +1,6 @@
 #include "linux.h"
 
-namespace looper::os {
+namespace looper::os::interface {
 
 looper::error io_read(
     const os::descriptor descriptor,

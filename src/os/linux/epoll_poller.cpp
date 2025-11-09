@@ -4,7 +4,7 @@
 #include "types_internal.h"
 #include "linux.h"
 
-namespace looper::os::poll {
+namespace looper::os::interface::poll {
 
 static constexpr size_t default_events_buffer_size = 32;
 

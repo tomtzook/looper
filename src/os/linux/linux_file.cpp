@@ -2,9 +2,9 @@
 #include <fcntl.h>
 
 #include "linux.h"
-#include "os/os.h"
+#include "os/os_interface.h"
 
-namespace looper::os::file {
+namespace looper::os::interface::file {
 
 static open_mode operator|(open_mode lhs, open_mode rhs) {
     return static_cast<open_mode>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));

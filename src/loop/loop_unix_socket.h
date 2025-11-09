@@ -1,11 +1,13 @@
 #pragma once
 
+#ifdef LOOPER_UNIX_SOCKETS
+
 #include "loop_stream.h"
-#include "os/meta.h"
+#include "os/factory.h"
 
 namespace looper::impl {
 
-class tcp final {
+class unix_socket final {
 public:
     enum class state {
         open,
@@ -14,14 +16,12 @@ public:
         closed
     };
 
-    tcp(looper::tcp handle, const loop_ptr& loop);
-    tcp(looper::tcp handle, const loop_ptr& loop, os::tcp_ptr&& socket);
+    unix_socket(looper::tcp handle, const loop_ptr& loop);
+    unix_socket(looper::tcp handle, const loop_ptr& loop, os::unix_socket_ptr&& socket);
 
     [[nodiscard]] state get_state() const;
 
-    void bind(uint16_t port);
-    void bind(std::string_view address, uint16_t port);
-    void connect(std::string_view address, uint16_t port, tcp_callback&& callback);
+    void connect(std::string_view path, unix_socket_callback&& callback);
     void close();
 
     void start_read(read_callback&& callback);
@@ -29,7 +29,7 @@ public:
     void write(stream::write_request&& request);
 
 private:
-    tcp(looper::tcp handle, const loop_ptr& loop, os::tcp_ptr&& socket, state state);
+    unix_socket(looper::unix_socket handle, const loop_ptr& loop, os::unix_socket_ptr&& socket, state state);
 
     bool handle_events(std::unique_lock<std::mutex>& lock, stream::control& stream_control, event_types events);
     void handle_connect(std::unique_lock<std::mutex>& lock, stream::control& stream_control);
@@ -38,15 +38,15 @@ private:
     looper::error read_from_obj(std::span<uint8_t> buffer, size_t& read_out);
     looper::error write_to_obj(std::span<const uint8_t> buffer, size_t& written_out);
 
-    os::tcp_ptr m_socket_obj;
+    os::unix_socket_ptr m_socket_obj;
     stream m_stream;
     state m_state;
-    tcp_callback m_connect_callback;
+    unix_socket_callback m_connect_callback;
 };
 
-class tcp_server final {
+class unix_socket_server final {
 public:
-    tcp_server(looper::tcp_server handle, const loop_ptr& loop);
+    unix_socket(looper::tcp_server handle, const loop_ptr& loop);
 
     void bind(uint16_t port);
     void bind(std::string_view address, uint16_t port);
@@ -67,3 +67,5 @@ private:
 };
 
 }
+
+#endif

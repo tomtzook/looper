@@ -5,6 +5,9 @@
 #include <looper_types.h>
 #include <looper_except.h>
 
+// todo: "interface" for dgram and stream work (tcp, unix socket, servers // udp)
+//  unify server and client types?
+
 namespace looper {
 
 /**

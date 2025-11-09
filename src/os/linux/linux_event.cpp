@@ -2,10 +2,10 @@
 #include <sys/eventfd.h>
 
 #include "os/linux/linux.h"
-#include "os/os.h"
+#include "os/os_interface.h"
 
 
-namespace looper::os::event {
+namespace looper::os::interface::event {
 
 static looper::error create_eventfd(os::descriptor& descriptor_out) {
     const auto fd = eventfd(0, EFD_NONBLOCK);

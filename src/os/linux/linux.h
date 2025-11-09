@@ -1,8 +1,8 @@
 #pragma once
 
-#include "os/os.h"
+#include "os/os_interface.h"
 
-namespace looper::os {
+namespace looper::os::interface {
 
 static looper::error os_error_to_looper(const int error) {
     switch (error) {

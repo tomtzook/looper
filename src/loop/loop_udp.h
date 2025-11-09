@@ -1,6 +1,6 @@
 #pragma once
 
-#include "os/factory.h"
+#include "os/os.h"
 #include "loop_resource.h"
 
 namespace looper::impl {
@@ -37,7 +37,7 @@ private:
     bool do_write();
 
     looper::udp m_handle;
-    os::udp_ptr m_socket_obj;
+    os::udp m_socket_obj;
     loop_resource m_resource;
     resource_state m_state;
     bool m_write_pending;

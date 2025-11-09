@@ -8,7 +8,7 @@ namespace looper::impl {
 
 udp::udp(const looper::udp handle, const loop_ptr& loop)
     : m_handle(handle)
-    , m_socket_obj(os::make_udp())
+    , m_socket_obj(os::udp::create())
     , m_resource(loop)
     , m_state()
     , m_write_pending(false)
@@ -16,7 +16,9 @@ udp::udp(const looper::udp handle, const loop_ptr& loop)
     , m_write_requests()
     , m_completed_write_requests() {
     auto [lock, control] = m_resource.lock_loop();
-    control.attach_to_loop(os::udp::get_descriptor(m_socket_obj.get()), 0,
+    control.attach_to_loop(
+        os::get_descriptor(m_socket_obj),
+        0,
         std::bind_front(&udp::handle_events, this));
 }
 
@@ -24,14 +26,14 @@ void udp::bind(const uint16_t port) {
     auto [lock, control] = m_resource.lock_loop();
     m_state.verify_not_errored();
 
-    OS_CHECK_THROW(os::udp::bind(m_socket_obj.get(), port));
+    OS_CHECK_THROW(os::ipv4_bind(m_socket_obj, port));
 }
 
 void udp::bind(const std::string_view address, const uint16_t port) {
     auto [lock, control] = m_resource.lock_loop();
     m_state.verify_not_errored();
 
-    OS_CHECK_THROW(os::udp::bind(m_socket_obj.get(), address, port));
+    OS_CHECK_THROW(os::ipv4_bind(m_socket_obj, address, port));
 }
 
 void udp::start_read(udp_read_callback&& callback) {
@@ -105,8 +107,8 @@ void udp::handle_read(std::unique_lock<std::mutex>& lock, loop_resource::control
     uint8_t read_buffer[1024]{};
     std::span<const uint8_t> data{};
     size_t read;
-    const auto error = os::udp::read(
-        m_socket_obj.get(),
+    const auto error = os::interface::udp::read(
+        m_socket_obj,
         read_buffer,
         sizeof(read_buffer),
         read,
@@ -169,8 +171,8 @@ bool udp::do_write() {
         auto& request = m_write_requests.front();
 
         size_t written;
-        const auto error = os::udp::write(
-            m_socket_obj.get(),
+        const auto error = os::interface::udp::write(
+            m_socket_obj,
             request.destination.ip,
             request.destination.port,
             request.buffer.get(),

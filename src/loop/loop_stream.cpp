@@ -17,29 +17,26 @@ void stream::control::request_events(const event_types events, const events_upda
 }
 
 stream::stream(const looper::handle handle, const loop_ptr& loop,
-    read_from_obj&& read_from_obj, write_to_obj&& write_to_obj,
-    const os::descriptor os_descriptor, handle_events_ext_func&& handle_events_ext)
+    os::streamable_object&& stream_obj,
+    handle_events_ext_func&& handle_events_ext)
     : m_handle(handle)
     , m_resource(loop)
     , m_state()
-    , m_read_from_obj(read_from_obj)
-    , m_write_to_obj(write_to_obj)
+    , m_stream_obj(std::move(stream_obj))
     , m_handle_events_ext_func(handle_events_ext)
     , m_user_read_callback(nullptr)
     , m_write_requests()
     , m_completed_write_requests()
     , m_write_pending(false) {
     auto [lock, control] = m_resource.lock_loop();
-    control.attach_to_loop(os_descriptor, 0, std::bind_front(&stream::handle_events, this));
+    control.attach_to_loop(
+        m_stream_obj.get_descriptor(),
+        0,
+        std::bind_front(&stream::handle_events, this));
 }
 
 looper::handle stream::handle() const {
     return m_handle;
-}
-
-std::pair<std::unique_lock<std::mutex>, stream::control> stream::use() {
-    auto [lock, res_control] = m_resource.lock_loop();
-    return {std::move(lock), control(m_state, res_control)};
 }
 
 void stream::start_read(read_callback&& callback) {
@@ -87,6 +84,11 @@ void stream::write(write_request&& request) {
         control.request_events(event_out, events_update_type::append);
         m_write_pending = true;
     }
+}
+
+std::pair<std::unique_lock<std::mutex>, stream::control> stream::use() {
+    auto [lock, res_control] = m_resource.lock_loop();
+    return {std::move(lock), control(m_state, res_control)};
 }
 
 void stream::handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control& control, const event_types events) {

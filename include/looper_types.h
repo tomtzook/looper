@@ -21,7 +21,11 @@ using timer = handle;
 using tcp = handle;
 using tcp_server = handle;
 using udp = handle;
-using sip_session = handle;
+
+#ifdef LOOPER_UNIX_SOCKETS
+using unix_socket = handle;
+using unix_socket_server = handle;
+#endif
 
 struct inet_address;
 struct inet_address_view;
@@ -65,6 +69,11 @@ using tcp_callback = std::function<void(tcp, error)>;
 using tcp_server_callback = std::function<void(tcp_server)>;
 using udp_callback = std::function<void(udp, error)>;
 using udp_read_callback = std::function<void(udp, inet_address_view, std::span<const uint8_t>, error)>;
+
+#ifdef LOOPER_UNIX_SOCKETS
+using unix_socket_callback = std::function<void(unix_socket, error)>;
+using unix_socket_server_callback = std::function<void(unix_socket_server)>;
+#endif
 
 enum : error {
     error_success = 0,

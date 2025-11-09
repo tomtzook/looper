@@ -32,8 +32,8 @@ set(SOURCES
 
         src/util/util.h
         src/util/handles.h
-        src/os/os.h
-        src/os/factory.h
+        src/os/os_interface.h
+        src/os/meta.h
         src/loop/loop.h
         src/types_internal.h
         src/looper_base.h
@@ -55,6 +55,8 @@ set(SOURCES
         src/loop/loop_future.cpp
         src/looper_types.cpp
         src/util/handles.cpp
+        src/loop/loop_unix_socket.h
+        src/os/os.h
 )
 
 if (UNIX)
@@ -66,6 +68,7 @@ if (UNIX)
             src/os/linux/linux_file.cpp
             src/os/linux/linux_io.cpp
     )
+    add_compile_definitions(LOOPER_UNIX_SOCKETS=1)
 endif ()
 
 add_library(looper STATIC ${SOURCES})

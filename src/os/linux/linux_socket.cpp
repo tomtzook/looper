@@ -1,36 +1,25 @@
 
+#include <cstring>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
 
+#ifdef LOOPER_UNIX_SOCKETS
+#include <sys/un.h>
+#endif
+
 #include "os/linux/linux.h"
-#include "os/os.h"
+#include "os/os_interface.h"
 
 namespace looper::os {
 
-static looper::error create_tcp_socket(os::descriptor& descriptor_out) {
-    const int fd = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (fd < 0) {
-        return get_call_error();
-    }
+namespace detail {
 
-    descriptor_out = fd;
-    return error_success;
-}
 
-static looper::error create_udp_socket(os::descriptor& descriptor_out) {
-    const int fd = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (fd < 0) {
-        return get_call_error();
-    }
-
-    descriptor_out = fd;
-    return error_success;
-}
-
-static looper::error configure_blocking(const os::descriptor descriptor, const bool blocking) {
+looper::error configure_blocking(const os::descriptor descriptor, const bool blocking) {
     auto flags = fcntl(descriptor, F_GETFL, 0);
     if (flags == -1) {
         return get_call_error();
@@ -44,7 +33,7 @@ static looper::error configure_blocking(const os::descriptor descriptor, const b
     return error_success;
 }
 
-static looper::error setoption(
+looper::error setoption(
     const os::descriptor descriptor,
     const int level,
     const int opt,
@@ -57,7 +46,7 @@ static looper::error setoption(
     return error_success;
 }
 
-static looper::error set_default_options(const os::descriptor descriptor) {
+looper::error set_default_options(const os::descriptor descriptor) {
     const int value = 1;
     auto status = setoption(descriptor, SOL_SOCKET, SO_REUSEPORT, &value, sizeof(value));
     if (status != error_success) {
@@ -72,7 +61,7 @@ static looper::error set_default_options(const os::descriptor descriptor) {
     return error_success;
 }
 
-static looper::error get_socket_error(const os::descriptor descriptor, looper::error& error_out) {
+looper::error get_socket_error(const os::descriptor descriptor, looper::error& error_out) {
     int code;
     socklen_t len = sizeof(code);
     if (::getsockopt(descriptor, SOL_SOCKET, SO_ERROR, &code, &len)) {
@@ -111,92 +100,7 @@ looper::error bind_socket_ipv4(const os::descriptor descriptor, const uint16_t p
     return error_success;
 }
 
-namespace tcp {
-
-struct tcp {
-    os::descriptor fd;
-    bool disabled;
-    bool closed;
-};
-
-looper::error create(tcp** tcp_out) {
-    os::descriptor descriptor;
-    auto status = create_tcp_socket(descriptor);
-    if (status != error_success) {
-        return status;
-    }
-
-    status = configure_blocking(descriptor, false);
-    if (status != error_success) {
-        ::close(descriptor);
-        return status;
-    }
-
-    status = set_default_options(descriptor);
-    if (status != error_success) {
-        ::close(descriptor);
-        return status;
-    }
-
-    auto* _tcp = static_cast<tcp*>(malloc(sizeof(tcp)));
-    if (_tcp == nullptr) {
-        ::close(descriptor);
-        return error_allocation;
-    }
-
-    _tcp->fd = descriptor;
-    _tcp->disabled = false;
-    _tcp->closed = false;
-
-    *tcp_out = _tcp;
-    return error_success;
-}
-
-void close(tcp* tcp) {
-    tcp->closed = true;
-    ::close(tcp->fd);
-
-    free(tcp);
-}
-
-descriptor get_descriptor(const tcp* tcp) {
-    return tcp->fd;
-}
-
-looper::error get_internal_error(const tcp* tcp, looper::error& error_out) {
-    return get_socket_error(tcp->fd, error_out);
-}
-
-looper::error bind(const tcp* tcp, const uint16_t port) {
-    if (tcp->closed) {
-        return error_fd_closed;
-    }
-    if (tcp->disabled) {
-        return error_operation_not_supported;
-    }
-
-    return bind_socket_ipv4(tcp->fd, port);
-}
-
-looper::error bind(const tcp* tcp, const std::string_view ip, const uint16_t port) {
-    if (tcp->closed) {
-        return error_fd_closed;
-    }
-    if (tcp->disabled) {
-        return error_operation_not_supported;
-    }
-
-    return bind_socket_ipv4(tcp->fd, ip, port);
-}
-
-looper::error connect(tcp* tcp, const std::string_view ip, const uint16_t port) {
-    if (tcp->closed) {
-        return error_fd_closed;
-    }
-    if (tcp->disabled) {
-        return error_operation_not_supported;
-    }
-
+looper::error connect_socket_ipv4(const os::descriptor descriptor, const std::string_view ip, const uint16_t port) {
     const std::string ip_c(ip);
 
     sockaddr_in addr{};
@@ -204,12 +108,9 @@ looper::error connect(tcp* tcp, const std::string_view ip, const uint16_t port) 
     addr.sin_port = ::htons(port);
     ::inet_pton(AF_INET, ip_c.c_str(), &addr.sin_addr);
 
-    if (::connect(tcp->fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr))) {
+    if (::connect(descriptor, reinterpret_cast<sockaddr*>(&addr), sizeof(addr))) {
         const auto error_code = get_call_error();
         if (error_code == error_in_progress) {
-            // while in non-blocking mode, socket operations may return inprogress as a result
-            // to operations they have not yet finished. this is fine.
-            tcp->disabled = true;
             return error_in_progress;
         }
 
@@ -219,16 +120,10 @@ looper::error connect(tcp* tcp, const std::string_view ip, const uint16_t port) 
     return error_success;
 }
 
-looper::error finalize_connect(tcp* tcp) {
-    if (tcp->closed) {
-        return error_fd_closed;
-    }
-
-    tcp->disabled = false;
-
+looper::error finalize_connect_socket(const os::descriptor descriptor) {
     // for non-blocking connect, we need to make sure it actually succeeded in the end.
     looper::error error;
-    const auto status = get_internal_error(tcp, error);
+    const auto status = get_socket_error(descriptor, error);
     if (status != error_success) {
         return status;
     }
@@ -239,34 +134,21 @@ looper::error finalize_connect(tcp* tcp) {
     return error_success;
 }
 
-looper::error read(const tcp* tcp, uint8_t* buffer, const size_t buffer_size, size_t& read_out) {
-    if (tcp->closed) {
-        return error_fd_closed;
-    }
-    if (tcp->disabled) {
-        return error_operation_not_supported;
-    }
-
+looper::error read_socket_stream(const os::descriptor descriptor, uint8_t* buffer, const size_t buffer_size, size_t& read_out) {
     size_t read_count;
-    const auto status = io_read(tcp->fd, buffer, buffer_size, read_count);
+    const auto status = io_read(descriptor, buffer, buffer_size, read_count);
     if (status != error_success) {
         return status;
     }
 
     read_out = read_count;
+
     return error_success;
 }
 
-looper::error write(const tcp* tcp, const uint8_t* buffer, const size_t size, size_t& written_out) {
-    if (tcp->closed) {
-        return error_fd_closed;
-    }
-    if (tcp->disabled) {
-        return error_operation_not_supported;
-    }
-
+looper::error write_socket_stream(const os::descriptor descriptor, const uint8_t* buffer, const size_t buffer_size, size_t& written_out) {
     size_t written;
-    const auto status = io_write(tcp->fd, buffer, size, written);
+    const auto status = io_write(descriptor, buffer, buffer_size, written);
     if (status != error_success) {
         return status;
     }
@@ -275,141 +157,14 @@ looper::error write(const tcp* tcp, const uint8_t* buffer, const size_t size, si
     return error_success;
 }
 
-looper::error listen(const tcp* tcp, const size_t backlog_size) {
-    if (tcp->closed) {
-        return error_fd_closed;
-    }
-    if (tcp->disabled) {
-        return error_operation_not_supported;
-    }
-
-    if (::listen(tcp->fd, static_cast<int>(backlog_size))) {
-        return get_call_error();
-    }
-
-    return error_success;
-}
-
-looper::error accept(const tcp* this_tcp, tcp** tcp_out) {
-    if (this_tcp->closed) {
-        return error_fd_closed;
-    }
-    if (this_tcp->disabled) {
-        return error_operation_not_supported;
-    }
-
-    sockaddr_in addr{};
-    socklen_t addr_len = sizeof(addr);
-
-    const auto new_fd = ::accept(this_tcp->fd, reinterpret_cast<sockaddr*>(&addr), &addr_len);
-    if (new_fd < 0) {
-        return get_call_error();
-    }
-
-    auto* _new_tcp = static_cast<tcp*>(malloc(sizeof(tcp)));
-    if (_new_tcp == nullptr) {
-        ::close(new_fd);
-        return error_allocation;
-    }
-
-    const auto status = configure_blocking(new_fd, false);
-    if (status != error_success) {
-        ::close(new_fd);
-        return status;
-    }
-
-    _new_tcp->fd = new_fd;
-    _new_tcp->disabled = false;
-    _new_tcp->closed = false;
-
-    *tcp_out = _new_tcp;
-    return error_success;
-}
-
-}
-
-namespace udp {
-
-struct udp {
-    os::descriptor fd;
-    bool closed;
-};
-
-looper::error create(udp** udp_out) {
-    os::descriptor descriptor;
-    auto status = create_udp_socket(descriptor);
-    if (status != error_success) {
-        return status;
-    }
-
-    status = configure_blocking(descriptor, false);
-    if (status != error_success) {
-        ::close(descriptor);
-        return status;
-    }
-
-    status = set_default_options(descriptor);
-    if (status != error_success) {
-        ::close(descriptor);
-        return status;
-    }
-
-    auto* _udp = static_cast<udp*>(malloc(sizeof(udp)));
-    if (_udp == nullptr) {
-        ::close(descriptor);
-        return error_allocation;
-    }
-
-    _udp->fd = descriptor;
-    _udp->closed = false;
-
-    *udp_out = _udp;
-    return error_success;
-}
-
-void close(udp* udp) {
-    udp->closed = true;
-    ::close(udp->fd);
-
-    free(udp);
-}
-
-descriptor get_descriptor(const udp* udp) {
-    return udp->fd;
-}
-
-looper::error get_internal_error(const udp* udp, looper::error& error_out) {
-    return get_socket_error(udp->fd, error_out);
-}
-
-looper::error bind(const udp* udp, const uint16_t port) {
-    if (udp->closed) {
-        return error_fd_closed;
-    }
-
-    return bind_socket_ipv4(udp->fd, port);
-}
-
-looper::error bind(const udp* udp, const std::string_view ip, const uint16_t port) {
-    if (udp->closed) {
-        return error_fd_closed;
-    }
-
-    return bind_socket_ipv4(udp->fd, ip, port);
-}
-
-looper::error read(
-    const udp* udp,
+looper::error readfrom_socket_dgram(
+    const os::descriptor descriptor,
     uint8_t* buffer,
     const size_t buffer_size,
     size_t& read_out,
     char* sender_ip_buff,
     const size_t sender_ip_buff_size,
     uint16_t& sender_port_out) {
-    if (udp->closed) {
-        return error_fd_closed;
-    }
-
     if (buffer_size == 0) {
         read_out = 0;
         return error_success;
@@ -418,7 +173,7 @@ looper::error read(
     sockaddr_in addr{};
     socklen_t addr_len = sizeof(addr);
     const auto result = ::recvfrom(
-        udp->fd,
+        descriptor,
         buffer,
         buffer_size,
         0,
@@ -446,17 +201,13 @@ looper::error read(
     return error_success;
 }
 
-looper::error write(
-    const udp* udp,
+looper::error writeto_socket_dgram(
+    const os::descriptor descriptor,
     const std::string_view dest_ip,
     const uint16_t dest_port,
     const uint8_t* buffer,
     const size_t size,
     size_t& written_out) {
-    if (udp->closed) {
-        return error_fd_closed;
-    }
-
     const std::string ip_c(dest_ip);
 
     sockaddr_in addr{};
@@ -465,7 +216,7 @@ looper::error write(
     ::inet_pton(AF_INET, ip_c.c_str(), &addr.sin_addr);
 
     const auto result = ::sendto(
-        udp->fd,
+        descriptor,
         buffer,
         size,
         0,
@@ -479,6 +230,469 @@ looper::error write(
     return error_success;
 }
 
+looper::error listen_socket(const os::descriptor descriptor, const size_t backlog_size) {
+    if (::listen(descriptor, static_cast<int>(backlog_size))) {
+        return get_call_error();
+    }
+
+    return error_success;
 }
+
+looper::error accept_socket(const os::descriptor descriptor, os::descriptor& descriptor_out) {
+    sockaddr_in addr{};
+    socklen_t addr_len = sizeof(addr);
+
+    const auto new_fd = ::accept(descriptor, reinterpret_cast<sockaddr*>(&addr), &addr_len);
+    if (new_fd < 0) {
+        return get_call_error();
+    }
+
+    const auto status = detail::configure_blocking(new_fd, false);
+    if (status != error_success) {
+        ::close(new_fd);
+        return status;
+    }
+
+    descriptor_out = new_fd;
+    return error_success;
+}
+
+struct base_socket {
+    os::descriptor fd;
+    bool closed;
+};
+
+template<typename T>
+looper::error accept_socket_strt(const os::descriptor descriptor, T** skt_out) {
+    auto* _new_skt = static_cast<T*>(malloc(sizeof(T)));
+    if (_new_skt == nullptr) {
+        return error_allocation;
+    }
+
+    os::descriptor new_fd;
+    const auto status = detail::accept_socket(descriptor, new_fd);
+    if (status != error_success) {
+        free(_new_skt);
+        return status;
+    }
+
+    reinterpret_cast<base_socket*>(_new_skt)->fd = new_fd;
+    reinterpret_cast<base_socket*>(_new_skt)->closed = false;
+
+    *skt_out = _new_skt;
+    return error_success;
+}
+
+template<typename T>
+looper::error create_new_socket(const int domain, const int type, const int protocol, T** skt_out) {
+    const int fd = ::socket(domain, type, protocol);
+    if (fd < 0) {
+        return get_call_error();
+    }
+
+    const os::descriptor descriptor = fd;
+
+    status = detail::configure_blocking(descriptor, false);
+    if (status != error_success) {
+        ::close(descriptor);
+        return status;
+    }
+
+    status = detail::set_default_options(descriptor);
+    if (status != error_success) {
+        ::close(descriptor);
+        return status;
+    }
+
+    // malloc so it won't throw
+    auto* _strt = static_cast<T*>(malloc(sizeof(T)));
+    if (_strt == nullptr) {
+        ::close(descriptor);
+        return error_allocation;
+    }
+
+    reinterpret_cast<base_socket*>(_strt)->fd = descriptor;
+    reinterpret_cast<base_socket*>(_strt)->closed = false;
+
+    *skt_out = _strt;
+    return error_success;
+}
+
+void close_socket(base_socket* skt) {
+    skt->closed = true;
+    ::close(skt->fd);
+    skt->fd = -1;
+
+    free(skt);
+}
+
+#ifdef LOOPER_UNIX_SOCKETS
+
+looper::error bind_socket_unix(const os::descriptor descriptor, const std::string_view path) {
+    sockaddr_un addr{};
+    addr.sun_family = AF_UNIX;
+    strcpy(addr.sun_path, path.data());
+
+    if (::bind(descriptor, reinterpret_cast<sockaddr*>(&addr), sizeof(addr))) {
+        return get_call_error();
+    }
+
+    return error_success;
+}
+
+looper::error connect_socket_unix(const os::descriptor descriptor, const std::string_view path) {
+    sockaddr_un addr{};
+    addr.sun_family = AF_UNIX;
+    strcpy(addr.sun_path, path.data());
+
+    if (::connect(descriptor, reinterpret_cast<sockaddr*>(&addr), sizeof(addr))) {
+        const auto error_code = get_call_error();
+        if (error_code == error_in_progress) {
+            return error_in_progress;
+        }
+
+        return get_call_error();
+    }
+
+    return error_success;
+}
+
+#endif
+
+}
+
+namespace tcp {
+
+struct tcp : public detail::base_socket {
+    bool disabled;
+};
+
+looper::error create(tcp** tcp_out) {
+    tcp* _tcp;
+    const auto status = detail::create_new_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, &_tcp);
+    if (status != error_success) {
+        return status;
+    }
+
+    _tcp->disabled = false;
+
+    *tcp_out = _tcp;
+    return error_success;
+}
+
+void close(tcp* tcp) {
+    detail::close_socket(tcp);
+}
+
+descriptor get_descriptor(const tcp* tcp) {
+    return tcp->fd;
+}
+
+looper::error get_internal_error(const tcp* tcp, looper::error& error_out) {
+    return detail::get_socket_error(tcp->fd, error_out);
+}
+
+looper::error bind(const tcp* tcp, const uint16_t port) {
+    if (tcp->closed) {
+        return error_fd_closed;
+    }
+    if (tcp->disabled) {
+        return error_operation_not_supported;
+    }
+
+    return detail::bind_socket_ipv4(tcp->fd, port);
+}
+
+looper::error bind(const tcp* tcp, const std::string_view ip, const uint16_t port) {
+    if (tcp->closed) {
+        return error_fd_closed;
+    }
+    if (tcp->disabled) {
+        return error_operation_not_supported;
+    }
+
+    return detail::bind_socket_ipv4(tcp->fd, ip, port);
+}
+
+looper::error connect(tcp* tcp, const std::string_view ip, const uint16_t port) {
+    if (tcp->closed) {
+        return error_fd_closed;
+    }
+    if (tcp->disabled) {
+        return error_operation_not_supported;
+    }
+
+    const auto status = detail::connect_socket_ipv4(tcp->fd, ip, port);
+    if (status == error_in_progress) {
+        // while in non-blocking mode, socket operations may return inprogress as a result
+        // to operations they have not yet finished. this is fine.
+        tcp->disabled = true;
+    }
+
+    return status;
+}
+
+looper::error finalize_connect(tcp* tcp) {
+    if (tcp->closed) {
+        return error_fd_closed;
+    }
+
+    tcp->disabled = false;
+    return detail::finalize_connect_socket(tcp->fd);
+}
+
+looper::error read(const tcp* tcp, uint8_t* buffer, const size_t buffer_size, size_t& read_out) {
+    if (tcp->closed) {
+        return error_fd_closed;
+    }
+    if (tcp->disabled) {
+        return error_operation_not_supported;
+    }
+
+    return detail::read_socket_stream(tcp->fd, buffer, buffer_size, read_out);
+}
+
+looper::error write(const tcp* tcp, const uint8_t* buffer, const size_t size, size_t& written_out) {
+    if (tcp->closed) {
+        return error_fd_closed;
+    }
+    if (tcp->disabled) {
+        return error_operation_not_supported;
+    }
+
+    return detail::write_socket_stream(tcp->fd, buffer, size, written_out);
+}
+
+looper::error listen(const tcp* tcp, const size_t backlog_size) {
+    if (tcp->closed) {
+        return error_fd_closed;
+    }
+    if (tcp->disabled) {
+        return error_operation_not_supported;
+    }
+
+    return detail::listen_socket(tcp->fd, backlog_size);
+}
+
+looper::error accept(const tcp* this_tcp, tcp** tcp_out) {
+    if (this_tcp->closed) {
+        return error_fd_closed;
+    }
+    if (this_tcp->disabled) {
+        return error_operation_not_supported;
+    }
+
+    tcp* _new_tcp;
+    const auto status = detail::accept_socket_strt(this_tcp->fd, &_new_tcp);
+    if (status != error_success) {
+        return status;
+    }
+
+    _new_tcp->disabled = false;
+
+    *tcp_out = _new_tcp;
+    return error_success;
+}
+
+}
+
+namespace udp {
+
+struct udp : public detail::base_socket {
+};
+
+looper::error create(udp** udp_out) {
+    udp* _udp;
+    const auto status = detail::create_new_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP, &_udp);
+    if (status != error_success) {
+        return status;
+    }
+
+    *udp_out = _udp;
+    return error_success;
+}
+
+void close(udp* udp) {
+    detail::close_socket(udp);
+}
+
+descriptor get_descriptor(const udp* udp) {
+    return udp->fd;
+}
+
+looper::error get_internal_error(const udp* udp, looper::error& error_out) {
+    return detail::get_socket_error(udp->fd, error_out);
+}
+
+looper::error bind(const udp* udp, const uint16_t port) {
+    if (udp->closed) {
+        return error_fd_closed;
+    }
+
+    return detail::bind_socket_ipv4(udp->fd, port);
+}
+
+looper::error bind(const udp* udp, const std::string_view ip, const uint16_t port) {
+    if (udp->closed) {
+        return error_fd_closed;
+    }
+
+    return detail::bind_socket_ipv4(udp->fd, ip, port);
+}
+
+looper::error read(
+    const udp* udp,
+    uint8_t* buffer,
+    const size_t buffer_size,
+    size_t& read_out,
+    char* sender_ip_buff,
+    const size_t sender_ip_buff_size,
+    uint16_t& sender_port_out) {
+    if (udp->closed) {
+        return error_fd_closed;
+    }
+
+    return detail::readfrom_socket_dgram(udp->fd, buffer, buffer_size, read_out, sender_ip_buff, sender_ip_buff_size, sender_port_out);
+}
+
+looper::error write(
+    const udp* udp,
+    const std::string_view dest_ip,
+    const uint16_t dest_port,
+    const uint8_t* buffer,
+    const size_t size,
+    size_t& written_out) {
+    if (udp->closed) {
+        return error_fd_closed;
+    }
+
+    return detail::writeto_socket_dgram(udp->fd, dest_ip, dest_port, buffer, size, written_out);
+}
+
+}
+
+#ifdef LOOPER_UNIX_SOCKETS
+
+namespace unix_sock {
+
+struct unix_socket : public detail::base_socket {
+    bool disabled;
+};
+
+looper::error create(unix_socket** skt_out) {
+    unix_socket* _skt;
+    const auto status = detail::create_new_socket(AF_UNIX, SOCK_STREAM, 0, &_skt);
+    if (status != error_success) {
+        return status;
+    }
+
+    _skt->disabled = false;
+
+    *skt_out = _skt;
+    return error_success;
+}
+
+void close(unix_socket* skt) {
+    detail::close_socket(skt);
+}
+
+descriptor get_descriptor(const unix_socket* skt) {
+    return skt->fd;
+}
+
+looper::error bind(const unix_socket* skt, std::string_view path) {
+    if (skt->closed) {
+        return error_fd_closed;
+    }
+    if (skt->disabled) {
+        return error_operation_not_supported;
+    }
+
+    return detail::bind_socket_unix(skt->fd, path);
+}
+
+looper::error connect(unix_socket* skt, std::string_view path) {
+    if (skt->closed) {
+        return error_fd_closed;
+    }
+    if (skt->disabled) {
+        return error_operation_not_supported;
+    }
+
+    const auto status = detail::connect_socket_unix(skt->fd, path);
+    if (status == error_in_progress) {
+        // while in non-blocking mode, socket operations may return inprogress as a result
+        // to operations they have not yet finished. this is fine.
+        skt->disabled = true;
+    }
+
+    return status;
+}
+
+looper::error finalize_connect(unix_socket* skt) {
+    if (skt->closed) {
+        return error_fd_closed;
+    }
+
+    skt->disabled = false;
+    return detail::finalize_connect_socket(skt->fd);
+}
+
+looper::error read(const unix_socket* skt, uint8_t* buffer, const size_t buffer_size, size_t& read_out) {
+    if (skt->closed) {
+        return error_fd_closed;
+    }
+    if (skt->disabled) {
+        return error_operation_not_supported;
+    }
+
+    return detail::read_socket_stream(skt->fd, buffer, buffer_size, read_out);
+}
+
+looper::error write(const unix_socket* skt, const uint8_t* buffer, const size_t size, size_t& written_out) {
+    if (skt->closed) {
+        return error_fd_closed;
+    }
+    if (skt->disabled) {
+        return error_operation_not_supported;
+    }
+
+    return detail::write_socket_stream(skt->fd, buffer, size, written_out);
+}
+
+looper::error listen(const unix_socket* skt, const size_t backlog_size) {
+    if (skt->closed) {
+        return error_fd_closed;
+    }
+    if (skt->disabled) {
+        return error_operation_not_supported;
+    }
+
+    return detail::listen_socket(skt->fd, backlog_size);
+}
+
+looper::error accept(const unix_socket* this_skt, unix_socket** skt_out) {
+    if (this_skt->closed) {
+        return error_fd_closed;
+    }
+    if (this_skt->disabled) {
+        return error_operation_not_supported;
+    }
+
+    unix_socket* _new_skt;
+    const auto status = detail::accept_socket_strt(this_skt->fd, &_new_skt);
+    if (status != error_success) {
+        return status;
+    }
+
+    _new_skt->disabled = false;
+
+    *skt_out = _new_skt;
+    return error_success;
+}
+
+}
+
+#endif
 
 }

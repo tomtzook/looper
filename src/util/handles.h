@@ -21,6 +21,8 @@ enum handle_types : uint8_t {
     type_tcp,
     type_tcp_server,
     type_udp,
+    type_unix_socket,
+    type_unix_socket_server,
     type_max
 };
 
