@@ -42,6 +42,8 @@ private:
     loop_resource::control m_resource_control;
 };
 
+// todo: potentional problem with moving this object and similar because of callbacks to loop and such being pointers
+//  to old memory
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
 class io {
 public:
@@ -60,6 +62,8 @@ public:
 
     [[nodiscard]] looper::handle handle() const;
     [[nodiscard]] const io_type& io_obj() const;
+
+    void register_to_loop();
 
     std::pair<std::unique_lock<std::mutex>, io_control> use();
     void set_custom_event_handler(custom_handle_events&& func);
@@ -141,13 +145,8 @@ io<t_wr_, t_rd_, t_io_>::io(const looper::handle handle, const loop_ptr& loop, i
     , m_read_callback()
     , m_write_requests()
     , m_completed_write_requests()
-    , m_write_pending(false) {
-    auto [lock, control] = m_resource.lock_loop();
-    control.attach_to_loop(
-        m_io.get_descriptor(),
-        0,
-        std::bind_front(&io::handle_events, this));
-}
+    , m_write_pending(false)
+{}
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
 looper::handle io<t_wr_, t_rd_, t_io_>::handle() const {
@@ -157,6 +156,15 @@ looper::handle io<t_wr_, t_rd_, t_io_>::handle() const {
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
 const t_io_& io<t_wr_, t_rd_, t_io_>::io_obj() const {
     return m_io;
+}
+
+template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
+void io<t_wr_, t_rd_, t_io_>::register_to_loop() {
+    auto [lock, control] = m_resource.lock_loop();
+    control.attach_to_loop(
+        m_io.get_descriptor(),
+        0,
+        std::bind_front(&io::handle_events, this));
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>

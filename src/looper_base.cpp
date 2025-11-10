@@ -15,6 +15,10 @@ loop_data::loop_data(const looper::loop handle)
     , tcps(handles::handle{handle}.index(), handles::type_tcp)
     , tcp_servers(handles::handle{handle}.index(), handles::type_tcp_server)
     , udps(handles::handle{handle}.index(), handles::type_udp)
+#ifdef LOOPER_UNIX_SOCKETS
+    , unix_sockets(handles::handle{handle}.index(), handles::type_unix_socket)
+    , unix_socket_servers(handles::handle{handle}.index(), handles::type_unix_socket_server)
+#endif
 {}
 
 loop_data::~loop_data() {

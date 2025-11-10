@@ -32,7 +32,7 @@ struct event_creator {
 };
 
 struct event_deleter {
-    void operator()(interface::event::event* event) const {
+    void operator()(const interface::event::event* event) const {
         interface::event::close(event);
     }
 };
@@ -86,7 +86,7 @@ struct poller_creator {
 };
 
 struct poller_deleter {
-    void operator()(interface::poll::poller* poller) const {
+    void operator()(const interface::poll::poller* poller) const {
         interface::poll::close(poller);
     }
 };
@@ -205,17 +205,17 @@ struct os_socket<tcp> {
     static looper::error ipv4_connect(const tcp& obj, const std::string_view ip, const uint16_t port) {
         return interface::tcp::connect(obj, ip, port);
     }
-    static looper::error ipv4_finalize_connect(const tcp& obj) {
+    static looper::error finalize_connect(const tcp& obj) {
         return interface::tcp::finalize_connect(obj);
     }
 };
 
 template<>
 struct os_socket_server<tcp> {
-    static looper::error ipv4_listen(const tcp& obj, const size_t backlog) {
+    static looper::error socket_accept(const tcp& obj, const size_t backlog) {
         return interface::tcp::listen(obj, backlog);
     }
-    static std::pair<looper::error, tcp> ipv4_accept(const tcp& obj) {
+    static std::pair<looper::error, tcp> socket_accept(const tcp& obj) {
         interface::tcp::tcp* new_tcp;
         const auto status = interface::tcp::accept(obj, &new_tcp);
         if (status != error_success) {
@@ -259,6 +259,45 @@ template<>
 struct os_descriptor<unix_socket> {
     static os::descriptor get(const unix_socket& obj) {
         return interface::unix_sock::get_descriptor(obj);
+    }
+};
+
+template<>
+struct os_socket<unix_socket> {
+    static looper::error unix_bind(const unix_socket& obj, const std::string_view path) {
+        return interface::unix_sock::bind(obj, path);
+    }
+    static looper::error unix_connect(const unix_socket& obj, const std::string_view path) {
+        return interface::unix_sock::connect(obj, path);
+    }
+    static looper::error finalize_connect(const unix_socket& obj) {
+        return interface::unix_sock::finalize_connect(obj);
+    }
+};
+
+template<>
+struct os_socket_server<unix_socket> {
+    static looper::error socket_accept(const unix_socket& obj, const size_t backlog) {
+        return interface::unix_sock::listen(obj, backlog);
+    }
+    static std::pair<looper::error, unix_socket> socket_accept(const unix_socket& obj) {
+        interface::unix_sock::unix_socket* new_obj;
+        const auto status = interface::unix_sock::accept(obj, &new_obj);
+        if (status != error_success) {
+            return { status, unix_socket::empty() };
+        }
+
+        return { error_success, unix_socket(unix_socket::smart_ptr(new_obj)) };
+    }
+};
+
+template<>
+struct os_stream<unix_socket> {
+    static looper::error read(const unix_socket& obj, std::span<uint8_t> buffer, size_t& read_out) {
+        return interface::unix_sock::read(obj, buffer.data(), buffer.size(), read_out);
+    }
+    static looper::error write(const unix_socket& obj, const std::span<const uint8_t> buffer, size_t& written_out) {
+        return interface::unix_sock::write(obj, buffer.data(), buffer.size(), written_out);
     }
 };
 
@@ -327,18 +366,18 @@ looper::error ipv4_connect(const t_& t, const std::string_view ip, const uint16_
 }
 
 template<os_object_type t_>
-looper::error ipv4_finalize_connect(const t_& t) {
-    return detail::os_socket<t_>::ipv4_finalize_connect(t);
+looper::error finalize_connect(const t_& t) {
+    return detail::os_socket<t_>::finalize_connect(t);
 }
 
 template<os_object_type t_>
-looper::error ipv4_listen(const t_& t, const size_t backlog) {
-    return detail::os_socket_server<t_>::ipv4_listen(t, backlog);
+looper::error socket_listen(const t_& t, const size_t backlog) {
+    return detail::os_socket_server<t_>::socket_accept(t, backlog);
 }
 
 template<os_object_type t_>
-std::pair<looper::error, t_> ipv4_accept(const t_& t) {
-    return detail::os_socket_server<t_>::ipv4_accept(t);
+std::pair<looper::error, t_> socket_accept(const t_& t) {
+    return detail::os_socket_server<t_>::socket_accept(t);
 }
 
 template<os_stream_type t_>
@@ -350,5 +389,19 @@ template<os_stream_type t_>
 looper::error stream_write(const t_& t, const std::span<const uint8_t> buffer, size_t& written_out) {
     return detail::os_stream<t_>::write(t, buffer, written_out);
 }
+
+#ifdef LOOPER_UNIX_SOCKETS
+
+template<os_object_type t_>
+looper::error unix_bind(const t_& t, const std::string_view path) {
+    return detail::os_socket<t_>::unix_bind(t, path);
+}
+
+template<os_object_type t_>
+looper::error unix_connect(const t_& t, const std::string_view path) {
+    return detail::os_socket<t_>::unix_connect(t, path);
+}
+
+#endif
 
 }

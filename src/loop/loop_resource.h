@@ -57,6 +57,12 @@ public:
     explicit loop_resource(loop_ptr loop);
     ~loop_resource();
 
+    loop_resource(const loop_resource&) = delete;
+    loop_resource& operator=(const loop_resource&) = delete;
+
+    loop_resource(loop_resource&& other) noexcept;
+    loop_resource& operator=(loop_resource&& other) noexcept;
+
     [[nodiscard]] looper::impl::resource handle() const;
 
     std::pair<std::unique_lock<std::mutex>, control> lock_loop();

@@ -285,7 +285,7 @@ looper::error accept_socket_strt(const os::descriptor descriptor, T** skt_out) {
 }
 
 template<typename T>
-looper::error create_new_socket(const int domain, const int type, const int protocol, T** skt_out) {
+looper::error create_new_socket(const int domain, const int type, const int protocol, const bool set_options, T** skt_out) {
     const int fd = ::socket(domain, type, protocol);
     if (fd < 0) {
         return get_call_error();
@@ -299,10 +299,12 @@ looper::error create_new_socket(const int domain, const int type, const int prot
         return status;
     }
 
-    status = detail::set_default_options(descriptor);
-    if (status != error_success) {
-        ::close(descriptor);
-        return status;
+    if (set_options) {
+        status = detail::set_default_options(descriptor);
+        if (status != error_success) {
+            ::close(descriptor);
+            return status;
+        }
     }
 
     auto* _strt = new (std::nothrow) T;
@@ -369,7 +371,7 @@ struct tcp : public detail::base_socket {
 
 looper::error create(tcp** tcp_out) {
     tcp* _tcp;
-    const auto status = detail::create_new_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, &_tcp);
+    const auto status = detail::create_new_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, true, &_tcp);
     if (status != error_success) {
         return status;
     }
@@ -503,7 +505,7 @@ struct udp : public detail::base_socket {
 
 looper::error create(udp** udp_out) {
     udp* _udp;
-    const auto status = detail::create_new_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP, &_udp);
+    const auto status = detail::create_new_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP, true, &_udp);
     if (status != error_success) {
         return status;
     }
@@ -581,7 +583,7 @@ struct unix_socket : public detail::base_socket {
 
 looper::error create(unix_socket** skt_out) {
     unix_socket* _skt;
-    const auto status = detail::create_new_socket(AF_UNIX, SOCK_STREAM, 0, &_skt);
+    const auto status = detail::create_new_socket(AF_UNIX, SOCK_STREAM, 0, false, &_skt);
     if (status != error_success) {
         return status;
     }
@@ -600,7 +602,7 @@ descriptor get_descriptor(const unix_socket* skt) {
     return skt->fd;
 }
 
-looper::error bind(const unix_socket* skt, std::string_view path) {
+looper::error bind(const unix_socket* skt, const std::string_view path) {
     if (skt->closed) {
         return error_fd_closed;
     }
@@ -611,7 +613,7 @@ looper::error bind(const unix_socket* skt, std::string_view path) {
     return detail::bind_socket_unix(skt->fd, path);
 }
 
-looper::error connect(unix_socket* skt, std::string_view path) {
+looper::error connect(unix_socket* skt, const std::string_view path) {
     if (skt->closed) {
         return error_fd_closed;
     }

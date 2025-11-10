@@ -100,8 +100,26 @@ loop_resource::loop_resource(loop_ptr loop)
 {}
 
 loop_resource::~loop_resource() {
-    auto [lock, control] = lock_loop();
-    control.detach_from_loop();
+    if (m_loop) {
+        auto [lock, control] = lock_loop();
+        control.detach_from_loop();
+    }
+}
+
+loop_resource::loop_resource(loop_resource&& other) noexcept
+    : m_loop(std::move(other.m_loop))
+    , m_resource(other.m_resource) {
+    other.m_loop.reset();
+    other.m_resource = empty_handle;
+}
+
+loop_resource& loop_resource::operator=(loop_resource&& other) noexcept {
+    m_loop = std::move(other.m_loop);
+    m_resource = other.m_resource;
+    other.m_loop.reset();
+    other.m_resource = empty_handle;
+
+    return *this;
 }
 
 looper::impl::resource loop_resource::handle() const {

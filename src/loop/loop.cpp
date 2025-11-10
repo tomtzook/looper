@@ -78,7 +78,7 @@ resource loop::add_resource(
     data->events = 0;
     data->callback = std::move(callback);
 
-    looper_trace_debug(log_module, "adding resource: loop=%lu, handle=%lu, fd=%lu", m_handle, handle, descriptor);
+    looper_trace_debug(log_module, "adding resource: loop=%lu, handle=%lu, fd=%u", m_handle, handle, descriptor);
 
     auto [_2, data_ptr] = m_resource_table.assign(handle, std::move(data));
 

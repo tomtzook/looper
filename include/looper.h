@@ -204,7 +204,6 @@ void stop_timer(timer timer);
  */
 void reset_timer(timer timer);
 
-// tcp
 /**
  * Creates a new tcp client object and attaches it to the given loop. This object provides a tcp
  * client. At the time of creation, the socket is neither connected nor bound.
@@ -251,7 +250,7 @@ void bind_tcp(tcp tcp, std::string_view address, uint16_t port);
  * @param port server port
  * @param callback callback called on connection finished or failed.
  */
-void connect_tcp(tcp tcp, std::string_view address, uint16_t port, tcp_callback&& callback);
+void connect_tcp(tcp tcp, std::string_view address, uint16_t port, connect_callback&& callback);
 
 /**
  * Starts automatic reading from the client. Must be connected to do so. When new data arrives, the given
@@ -323,7 +322,7 @@ void bind_tcp_server(tcp_server tcp, std::string_view address, uint16_t port);
  * @param backlog backlog of connections pending
  * @param callback callback to call on connection attempt
  */
-void listen_tcp(tcp_server tcp, size_t backlog, tcp_server_callback&& callback);
+void listen_tcp(tcp_server tcp, size_t backlog, listen_callback&& callback);
 
 /**
  * Accept a pending client connection. Should be called from a listen callback.
@@ -385,5 +384,22 @@ void stop_udp_read(udp udp);
  * @param callback callback on write finished
  */
 void write_udp(udp udp, inet_address_view destination, std::span<const uint8_t> buffer, udp_callback&& callback);
+
+#ifdef LOOPER_UNIX_SOCKETS
+
+unix_socket create_unix_socket(loop loop);
+void destroy_unix_socket(unix_socket unix_socket);
+void connect_unix_socket(unix_socket unix_socket, std::string_view path, connect_callback&& callback);
+void start_unix_socket_read(unix_socket unix_socket, read_callback&& callback);
+void stop_unix_socket_read(unix_socket unix_socket);
+void write_unix_socket(unix_socket unix_socket, std::span<const uint8_t> buffer, write_callback&& callback);
+
+unix_socket_server create_unix_socket_server(loop loop);
+void destroy_unix_socket_server(unix_socket_server unix_socket);
+void bind_unix_socket_server(unix_socket_server unix_socket, std::string_view path);
+void listen_unix_socket(unix_socket_server unix_socket, size_t backlog, listen_callback&& callback);
+unix_socket accept_unix_socket(unix_socket_server unix_socket);
+
+#endif
 
 }

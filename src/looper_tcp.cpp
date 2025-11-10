@@ -50,7 +50,7 @@ void bind_tcp(const tcp tcp, const std::string_view address, const uint16_t port
     tcp_impl.bind(address, port);
 }
 
-void connect_tcp(const tcp tcp, const std::string_view address, const uint16_t port, tcp_callback&& callback) {
+void connect_tcp(const tcp tcp, const std::string_view address, const uint16_t port, connect_callback&& callback) {
     std::unique_lock lock(get_global_loop_data().mutex);
 
     auto& data = get_loop_from_handle(tcp);
@@ -58,7 +58,7 @@ void connect_tcp(const tcp tcp, const std::string_view address, const uint16_t p
     looper_trace_info(log_module, "connecting tcp: loop=%lu, handle=%lu, address=%s, port=%d", data.handle, tcp, address.data(), port);
 
     auto& tcp_impl = data.tcps[tcp];
-    tcp_impl.connect(address, port, std::move(callback));
+    tcp_impl.connect(std::move(callback), address, port);
 }
 
 void start_tcp_read(const tcp tcp, read_callback&& callback) {
@@ -83,7 +83,7 @@ void stop_tcp_read(const tcp tcp) {
     tcp_impl.stop_read();
 }
 
-void write_tcp(const tcp tcp, const std::span<const uint8_t> buffer, tcp_callback&& callback) {
+void write_tcp(const tcp tcp, const std::span<const uint8_t> buffer, write_callback&& callback) {
     std::unique_lock lock(get_global_loop_data().mutex);
 
     auto& data = get_loop_from_handle(tcp);
@@ -149,7 +149,7 @@ void bind_tcp_server(const tcp_server tcp, const uint16_t port) {
     tcp_impl.bind(port);
 }
 
-void listen_tcp(const tcp_server tcp, const size_t backlog, tcp_server_callback&& callback) {
+void listen_tcp(const tcp_server tcp, const size_t backlog, listen_callback&& callback) {
     std::unique_lock lock(get_global_loop_data().mutex);
 
     auto& data = get_loop_from_handle(tcp);

@@ -65,8 +65,8 @@ using event_callback = std::function<void(event)>;
 using timer_callback = std::function<void(timer)>;
 using read_callback = std::function<void(handle, std::span<const uint8_t>, error)>;
 using write_callback = std::function<void(handle, error)>;
-using tcp_callback = std::function<void(tcp, error)>;
-using tcp_server_callback = std::function<void(tcp_server)>;
+using connect_callback = std::function<void(handle, error)>;
+using listen_callback = std::function<void(handle)>;
 using udp_callback = std::function<void(udp, error)>;
 using udp_read_callback = std::function<void(udp, inet_address_view, std::span<const uint8_t>, error)>;
 

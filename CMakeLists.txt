@@ -36,7 +36,7 @@ set(SOURCES
         src/loop/loop.h
         src/types_internal.h
         src/looper_base.h
-        src/loop/loop_unix_socket.h
+        src/loop/loop_socket.h
         src/os/os.h
 
         src/looper_base.cpp
@@ -47,7 +47,6 @@ set(SOURCES
         src/loop/loop.cpp
         src/loop/loop_io.h
         src/loop/loop_io.cpp
-        src/loop/loop_tcp.cpp
         src/loop/loop_udp.cpp
         src/loop/loop_resource.cpp
         src/loop/loop_udp.h
@@ -67,6 +66,7 @@ if (UNIX)
             src/os/linux/epoll_poller.cpp
             src/os/linux/linux_file.cpp
             src/os/linux/linux_io.cpp
+            src/looper_unix_socket.cpp
     )
     add_compile_definitions(LOOPER_UNIX_SOCKETS=1)
 endif ()
