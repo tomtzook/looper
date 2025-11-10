@@ -1,7 +1,7 @@
 #pragma once
 
-#include "os/meta.h"
 #include "loop_resource.h"
+#include "os/os.h"
 
 namespace looper::impl {
 
@@ -16,7 +16,7 @@ private:
     void handle_events(std::unique_lock<std::mutex>& lock, const loop_resource::control& control, event_types events) const;
 
     looper::event m_handle;
-    os::event_ptr m_event_obj;
+    os::event m_event_obj;
     loop_resource m_resource;
     event_callback m_callback;
 };

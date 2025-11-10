@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <new>
 
 #ifdef LOOPER_UNIX_SOCKETS
 #include <sys/un.h>
@@ -14,7 +15,7 @@
 #include "os/linux/linux.h"
 #include "os/os_interface.h"
 
-namespace looper::os {
+namespace looper::os::interface {
 
 namespace detail {
 
@@ -264,7 +265,7 @@ struct base_socket {
 
 template<typename T>
 looper::error accept_socket_strt(const os::descriptor descriptor, T** skt_out) {
-    auto* _new_skt = static_cast<T*>(malloc(sizeof(T)));
+    auto* _new_skt = new (std::nothrow) T;
     if (_new_skt == nullptr) {
         return error_allocation;
     }
@@ -272,7 +273,7 @@ looper::error accept_socket_strt(const os::descriptor descriptor, T** skt_out) {
     os::descriptor new_fd;
     const auto status = detail::accept_socket(descriptor, new_fd);
     if (status != error_success) {
-        free(_new_skt);
+        delete _new_skt;
         return status;
     }
 
@@ -292,7 +293,7 @@ looper::error create_new_socket(const int domain, const int type, const int prot
 
     const os::descriptor descriptor = fd;
 
-    status = detail::configure_blocking(descriptor, false);
+    auto status = detail::configure_blocking(descriptor, false);
     if (status != error_success) {
         ::close(descriptor);
         return status;
@@ -304,8 +305,7 @@ looper::error create_new_socket(const int domain, const int type, const int prot
         return status;
     }
 
-    // malloc so it won't throw
-    auto* _strt = static_cast<T*>(malloc(sizeof(T)));
+    auto* _strt = new (std::nothrow) T;
     if (_strt == nullptr) {
         ::close(descriptor);
         return error_allocation;
@@ -323,7 +323,7 @@ void close_socket(base_socket* skt) {
     ::close(skt->fd);
     skt->fd = -1;
 
-    free(skt);
+    delete skt;
 }
 
 #ifdef LOOPER_UNIX_SOCKETS

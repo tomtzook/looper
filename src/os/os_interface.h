@@ -16,7 +16,7 @@ namespace event {
 struct event;
 
 looper::error create(event** event_out);
-void close(event* event);
+void close(const event* event);
 
 descriptor get_descriptor(const event* event);
 
@@ -140,7 +140,7 @@ struct event_data {
 struct poller;
 
 looper::error create(poller** poller_out);
-void close(poller* poller);
+void close(const poller* poller);
 
 looper::error add(const poller* poller, os::descriptor descriptor, event_types events);
 looper::error set(const poller* poller, os::descriptor descriptor, event_types events);

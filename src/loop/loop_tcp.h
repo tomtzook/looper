@@ -1,7 +1,6 @@
 #pragma once
 
-#include "loop_stream.h"
-#include "os/meta.h"
+#include "loop_io.h"
 
 namespace looper::impl {
 
@@ -15,32 +14,27 @@ public:
     };
 
     tcp(looper::tcp handle, const loop_ptr& loop);
-    tcp(looper::tcp handle, const loop_ptr& loop, os::tcp_ptr&& socket);
-
-    [[nodiscard]] state get_state() const;
+    tcp(looper::tcp handle, const loop_ptr& loop, os::tcp&& socket);
 
     void bind(uint16_t port);
     void bind(std::string_view address, uint16_t port);
     void connect(std::string_view address, uint16_t port, tcp_callback&& callback);
+
+    void start_read(looper::read_callback&& callback);
+    void stop_read();
+    void write(stream_write_request&& request);
+
     void close();
 
-    void start_read(read_callback&& callback);
-    void stop_read();
-    void write(stream::write_request&& request);
-
 private:
-    tcp(looper::tcp handle, const loop_ptr& loop, os::tcp_ptr&& socket, state state);
+    tcp(looper::tcp handle, const loop_ptr& loop, os::tcp&& socket, state state);
 
-    bool handle_events(std::unique_lock<std::mutex>& lock, stream::control& stream_control, event_types events);
-    void handle_connect(std::unique_lock<std::mutex>& lock, stream::control& stream_control);
-    void on_connect_done(std::unique_lock<std::mutex>& lock, stream::control& stream_control, error error = error_success);
+    bool handle_events(std::unique_lock<std::mutex>& lock, const io_control& control, event_types events);
+    void handle_connect(std::unique_lock<std::mutex>& lock, const io_control& control);
+    void on_connect_done(std::unique_lock<std::mutex>& lock, const io_control& control, error error = error_success);
 
-    looper::error read_from_obj(std::span<uint8_t> buffer, size_t& read_out);
-    looper::error write_to_obj(std::span<const uint8_t> buffer, size_t& written_out);
-
-    os::tcp_ptr m_socket_obj;
-    stream m_stream;
     state m_state;
+    stream<os::tcp> m_stream;
     tcp_callback m_connect_callback;
 };
 
@@ -62,7 +56,7 @@ private:
     looper::tcp_server m_handle;
     loop_ptr m_loop;
     loop_resource m_resource;
-    os::tcp_ptr m_socket_obj;
+    os::tcp m_socket_obj;
     tcp_server_callback m_callback;
 };
 

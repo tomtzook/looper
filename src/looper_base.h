@@ -4,11 +4,7 @@
 #include <thread>
 #include <cstring>
 
-#include <looper.h>
-
 #include "util/handles.h"
-#include "util/util.h"
-#include "os/meta.h"
 
 #include "loop/loop.h"
 #include "loop/loop_timer.h"
@@ -64,9 +60,9 @@ struct looper_data {
 
 looper_data& get_global_loop_data();
 
-inline std::optional<loop_data*> try_get_loop(loop loop);
-inline loop_data& get_loop(loop loop);
-inline loop get_loop_handle(handle handle);
-inline loop_data& get_loop_from_handle(handle handle);
+std::optional<loop_data*> try_get_loop(loop loop);
+loop_data& get_loop(loop loop);
+loop get_loop_handle(handle handle);
+loop_data& get_loop_from_handle(handle handle);
 
 }

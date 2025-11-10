@@ -1,5 +1,6 @@
 #pragma once
 
+#include <assert.h>
 #include <variant>
 
 #include <looper_except.h>
@@ -121,7 +122,6 @@ public:
     using pointer = t_*;
     using smart_ptr = std::unique_ptr<underlying_type, deleter_>;
 
-    os_object() = delete;
     os_object(const os_object&) = delete;
     os_object(os_object&&) = default;
     os_object& operator=(const os_object&) = delete;
@@ -130,16 +130,22 @@ public:
     explicit os_object(smart_ptr&& ptr) : m_ptr(std::move(ptr)) {}
 
     // ReSharper disable once CppNonExplicitConversionOperator
-    operator pointer() const { return m_ptr.get(); } // NOLINT(*-explicit-constructor)
+    operator pointer() const { assert(m_ptr.get() != nullptr); return m_ptr.get(); } // NOLINT(*-explicit-constructor)
 
-    void reset() { m_ptr.reset(); }
+    void close() { m_ptr.reset(); }
 
     static os_object create() {
         const auto obj = creator_()();
         return os_object(smart_ptr(obj));
     }
 
+    static os_object empty() {
+        return os_object();
+    }
+
 private:
+    os_object() : m_ptr() {}
+
     smart_ptr m_ptr;
 };
 
@@ -170,6 +176,8 @@ struct os_descriptor;
 template<os_object_type t_>
 struct os_socket;
 template<os_object_type t_>
+struct os_socket_server;
+template<os_object_type t_>
 struct os_stream;
 
 template<>
@@ -178,11 +186,6 @@ struct os_descriptor<event> {
         return interface::event::get_descriptor(obj);
     }
 };
-
-template<>
-struct os_socket<event> {};
-template<>
-struct os_stream<event> {};
 
 template<>
 struct os_descriptor<tcp> {
@@ -204,6 +207,22 @@ struct os_socket<tcp> {
     }
     static looper::error ipv4_finalize_connect(const tcp& obj) {
         return interface::tcp::finalize_connect(obj);
+    }
+};
+
+template<>
+struct os_socket_server<tcp> {
+    static looper::error ipv4_listen(const tcp& obj, const size_t backlog) {
+        return interface::tcp::listen(obj, backlog);
+    }
+    static std::pair<looper::error, tcp> ipv4_accept(const tcp& obj) {
+        interface::tcp::tcp* new_tcp;
+        const auto status = interface::tcp::accept(obj, &new_tcp);
+        if (status != error_success) {
+            return { status, tcp::empty() };
+        }
+
+        return { error_success, tcp(tcp::smart_ptr(new_tcp)) };
     }
 };
 
@@ -234,16 +253,6 @@ struct os_socket<udp> {
     }
 };
 
-template<>
-struct os_stream<udp> {};
-
-template<>
-struct os_descriptor<poller> {};
-template<>
-struct os_socket<poller> {};
-template<>
-struct os_stream<poller> {};
-
 #ifdef LOOPER_UNIX_SOCKETS
 
 template<>
@@ -257,49 +266,89 @@ struct os_descriptor<unix_socket> {
 
 }
 
-template<detail::os_object_type t_>
+template<typename t_>
+concept os_object_type = detail::os_object_type<t_>;
+template<typename t_>
+concept os_stream_type = requires(t_ t) {
+    { detail::os_stream<t_>::read };
+    { detail::os_stream<t_>::write };
+};
+
+
+// todo: shrink scopes here with concepts
+
+template<os_object_type t_>
 os::descriptor get_descriptor(const t_& t) {
     return detail::os_descriptor<t_>::get(t);
 }
 
-template<detail::os_object_type t_>
+inline looper::error event_set(const event& obj) {
+    return interface::event::set(obj);
+}
+
+inline looper::error event_clear(const event& obj) {
+    return interface::event::clear(obj);
+}
+
+inline looper::error poller_add(const poller& obj, const os::descriptor descriptor, const event_types events) {
+    return interface::poll::add(obj, descriptor, events);
+}
+
+inline looper::error poller_remove(const poller& obj, const os::descriptor descriptor) {
+    return interface::poll::remove(obj, descriptor);
+}
+
+inline looper::error poller_set(const poller& obj, const os::descriptor descriptor, const event_types events) {
+    return interface::poll::set(obj, descriptor, events);
+}
+
+inline looper::error poller_poll(
+    const poller& obj,
+    const size_t max_events,
+    const std::chrono::milliseconds timeout,
+    interface::poll::event_data* events,
+    size_t& event_count) {
+    return interface::poll::poll(obj, max_events, timeout, events, event_count);
+}
+
+template<os_object_type t_>
 looper::error ipv4_bind(const t_& t, const std::string_view ip, const uint16_t port) {
     return detail::os_socket<t_>::ipv4_bind(t, ip, port);
 }
 
-template<detail::os_object_type t_>
+template<os_object_type t_>
 looper::error ipv4_bind(const t_& t, const uint16_t port) {
     return detail::os_socket<t_>::ipv4_bind(t, port);
 }
 
-class streamable_object {
-public:
-    template<detail::os_object_type t_>
-    explicit streamable_object(t_&& t) : m_t(t) {}
+template<os_object_type t_>
+looper::error ipv4_connect(const t_& t, const std::string_view ip, const uint16_t port) {
+    return detail::os_socket<t_>::ipv4_connect(t, ip, port);
+}
 
-    [[nodiscard]] os::descriptor get_descriptor() const {
-        return std::visit([]<typename T0>(const T0& val)->auto {
-            using T = std::decay_t<T0>;
-            return detail::os_descriptor<T>::get(val);
-        }, m_t);
-    }
+template<os_object_type t_>
+looper::error ipv4_finalize_connect(const t_& t) {
+    return detail::os_socket<t_>::ipv4_finalize_connect(t);
+}
 
-    looper::error read(std::span<uint8_t> buffer, size_t& read_out) {
-        return std::visit([&buffer, &read_out]<typename T0>(const T0& val)->looper::error {
-            using T = std::decay_t<T0>;
-            return detail::os_stream<T>::read(val, buffer, read_out);
-        }, m_t);
-    }
+template<os_object_type t_>
+looper::error ipv4_listen(const t_& t, const size_t backlog) {
+    return detail::os_socket_server<t_>::ipv4_listen(t, backlog);
+}
 
-    looper::error write(const std::span<const uint8_t> buffer, size_t& written_out) {
-        return std::visit([&buffer, &written_out]<typename T0>(const T0& val)->looper::error {
-            using T = std::decay_t<T0>;
-            return detail::os_stream<T>::write(val, buffer, written_out);
-        }, m_t);
-    }
+template<os_object_type t_>
+std::pair<looper::error, t_> ipv4_accept(const t_& t) {
+    return detail::os_socket_server<t_>::ipv4_accept(t);
+}
 
-private:
-    detail::streamable_type m_t;
-};
+template<os_stream_type t_>
+looper::error stream_read(const t_& t, std::span<uint8_t> buffer, size_t& read_out) {
+    return detail::os_stream<t_>::read(t, buffer, read_out);
+}
+
+template<os_stream_type t_>
+looper::error stream_write(const t_& t, const std::span<const uint8_t> buffer, size_t& written_out) {
+    return detail::os_stream<t_>::write(t, buffer, written_out);
+}
 
 }

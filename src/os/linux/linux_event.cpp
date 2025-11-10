@@ -1,5 +1,6 @@
 
 #include <sys/eventfd.h>
+#include <new>
 
 #include "os/linux/linux.h"
 #include "os/os_interface.h"
@@ -28,7 +29,7 @@ looper::error create(event** event_out) {
         return status;
     }
 
-    auto* _event = static_cast<event*>(malloc(sizeof(event)));
+    auto* _event = new (std::nothrow) event;
     if (_event == nullptr) {
         ::close(descriptor);
         return error_allocation;
@@ -40,10 +41,10 @@ looper::error create(event** event_out) {
     return error_success;
 }
 
-void close(event* event) {
+void close(const event* event) {
     ::close(event->fd);
 
-    free(event);
+    delete event;
 }
 
 descriptor get_descriptor(const event* event) {

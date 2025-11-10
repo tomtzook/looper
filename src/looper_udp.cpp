@@ -71,7 +71,7 @@ void write_udp(const udp udp, inet_address_view destination, const std::span<con
     auto& udp_impl = data.udps[udp];
 
     const auto buffer_size = buffer.size_bytes();
-    impl::udp::write_request request;
+    impl::udp_write_request request;
     request.destination = destination;
     request.buffer = std::unique_ptr<uint8_t[]>(new uint8_t[buffer_size]);
     request.size = buffer_size;

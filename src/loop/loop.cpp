@@ -1,7 +1,6 @@
 
 #include "looper_trace.h"
 
-#include "os/meta.h"
 #include "loop.h"
 
 namespace looper::impl {
@@ -13,9 +12,9 @@ constexpr event_types must_have_events = event_error | event_hung;
 loop::loop(const looper::loop handle)
     : m_handle(handle)
     , m_mutex()
-    , m_poller(os::make_poller())
+    , m_poller(os::poller::create())
     , m_timeout(initial_poll_timeout)
-    , m_run_loop_event(os::make_event())
+    , m_run_loop_event(os::event::create())
     , m_event_data()
     , m_stop(false)
     , m_executing(false)
@@ -29,10 +28,10 @@ loop::loop(const looper::loop handle)
 
     looper_trace_info(log_module, "creating loop: handle=%lu", m_handle);
 
-    add_resource(os::event::get_descriptor(m_run_loop_event.get()),
+    add_resource(os::get_descriptor(m_run_loop_event),
                  event_in,
                  [this](resource, void*, event_types)->void {
-                     os::event::clear(m_run_loop_event.get());
+                     os::event_clear(m_run_loop_event);
                  });
 }
 
@@ -99,7 +98,7 @@ void loop::remove_resource(const resource resource) {
     looper_trace_debug(log_module, "removing resource: loop=%lu, handle=%lu", m_handle, resource);
 
     m_descriptor_map.erase(data->descriptor);
-    os::poll::remove(m_poller.get(), data->descriptor);
+    os::poller_remove(m_poller, data->descriptor);
 
     signal_run();
 }
@@ -127,7 +126,7 @@ void loop::request_resource_events(
             throw std::runtime_error("unsupported event type");
     }
 
-    looper_trace_debug(log_module, "modifying resource events: loop=%lu, handle=%lu, type=%d, events=%lu",
+    looper_trace_debug(log_module, "modifying resource events: loop=%lu, handle=%lu, type=%d, events=0x%x",
                        m_handle, resource, static_cast<uint8_t>(update_type), events);
 
     m_updates.push_back({data.our_handle, update_type, events});
@@ -183,7 +182,7 @@ void loop::signal_run() {
     auto [lock, _] = lock_if_needed();
 
     looper_trace_debug(log_module, "signalling loop run: loop=%lu", m_handle);
-    os::event::set(m_run_loop_event.get());
+    os::event_set(m_run_loop_event);
 }
 
 bool loop::run_once() {
@@ -202,8 +201,8 @@ bool loop::run_once() {
     size_t event_count;
     lock.unlock();
     {
-        const auto status = os::poll::poll(
-            m_poller.get(),
+        const auto status = os::poller_poll(
+            m_poller,
             max_events_for_process,
             m_timeout,
             m_event_data,
@@ -286,7 +285,7 @@ void loop::process_update(const update& update) {
     switch (update.type) {
         case update::type_add: {
             data.events = update.events | must_have_events;
-            const auto status = os::poll::add(m_poller.get(), data.descriptor, data.events);
+            const auto status = os::poller_add(m_poller, data.descriptor, data.events);
             if (status != error_success) {
                 looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
                 std::abort();
@@ -295,7 +294,7 @@ void loop::process_update(const update& update) {
         }
         case update::type_new_events: {
             data.events = update.events | must_have_events;
-            const auto status = os::poll::set(m_poller.get(), data.descriptor, data.events);
+            const auto status = os::poller_set(m_poller, data.descriptor, data.events);
             if (status != error_success) {
                 looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
                 std::abort();
@@ -304,7 +303,7 @@ void loop::process_update(const update& update) {
         }
         case update::type_new_events_add: {
             data.events |= update.events | must_have_events;
-            const auto status = os::poll::set(m_poller.get(), data.descriptor, data.events);
+            const auto status = os::poller_set(m_poller, data.descriptor, data.events);
             if (status != error_success) {
                 looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
                 std::abort();
@@ -314,7 +313,7 @@ void loop::process_update(const update& update) {
         case update::type_new_events_remove: {
             data.events &= ~update.events;
             data.events |= must_have_events;
-            const auto status = os::poll::set(m_poller.get(), data.descriptor, data.events);
+            const auto status = os::poller_set(m_poller, data.descriptor, data.events);
             if (status != error_success) {
                 looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
                 std::abort();
@@ -342,7 +341,7 @@ void loop::process_events(std::unique_lock<std::mutex>& lock, const size_t event
             // make sure to remove this fd, guess it somehow was left over
             looper_trace_debug(log_module, "resource received events, but isn't attached to anything: fd=%lu", current_event_data.descriptor);
 
-            const auto status = os::poll::remove(m_poller.get(), current_event_data.descriptor);
+            const auto status = os::poller_remove(m_poller, current_event_data.descriptor);
             if (status != error_success) {
                 looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
                 std::abort();
@@ -364,7 +363,7 @@ void loop::process_events(std::unique_lock<std::mutex>& lock, const size_t event
             continue;
         }
 
-        looper_trace_debug(log_module, "resource has events: loop=%lu, handle=%lu, events=%lu",
+        looper_trace_debug(log_module, "resource has events: loop=%lu, handle=%lu, events=0x%x",
                            m_handle, resource_data->our_handle, adjusted_flags);
 
         invoke_func(lock, "resource_callback",

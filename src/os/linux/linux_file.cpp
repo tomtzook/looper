@@ -1,5 +1,6 @@
 
 #include <fcntl.h>
+#include <new>
 
 #include "linux.h"
 #include "os/os_interface.h"
@@ -113,7 +114,7 @@ looper::error create(
         return status;
     }
 
-    auto* _file = static_cast<file*>(malloc(sizeof(file)));
+    auto* _file = new (std::nothrow) file;
     if (_file == nullptr) {
         ::close(descriptor);
         return error_allocation;
@@ -131,7 +132,7 @@ void close(file* file) {
     file->closed = true;
     ::close(file->fd);
 
-    free(file);
+    delete file;
 }
 
 descriptor get_descriptor(const file* file) {

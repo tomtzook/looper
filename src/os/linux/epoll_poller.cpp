@@ -1,5 +1,6 @@
 
 #include <sys/epoll.h>
+#include <new>
 
 #include "types_internal.h"
 #include "linux.h"
@@ -61,14 +62,14 @@ struct poller {
 };
 
 looper::error create(poller** poller_out) {
-    auto* _poller = static_cast<poller*>(malloc(sizeof(poller)));
+    auto* _poller = new (std::nothrow) poller;
     if (_poller == nullptr) {
         return error_allocation;
     }
 
-    _poller->events = static_cast<epoll_event*>(malloc(sizeof(epoll_event) * default_events_buffer_size));
+    _poller->events = new (std::nothrow) epoll_event[default_events_buffer_size];
     if (_poller->events == nullptr) {
-        free(_poller);
+        delete _poller;
         return error_allocation;
     }
     _poller->events_buffer_size = default_events_buffer_size;
@@ -76,8 +77,8 @@ looper::error create(poller** poller_out) {
     os::descriptor descriptor;
     const auto status = create_epoll(descriptor);
     if (status != error_success) {
-        free(_poller->events);
-        free(_poller);
+        delete[] _poller->events;
+        delete _poller;
         return status;
     }
 
@@ -87,11 +88,11 @@ looper::error create(poller** poller_out) {
     return error_success;
 }
 
-void close(poller* poller) {
+void close(const poller* poller) {
     ::close(poller->fd);
 
-    free(poller->events);
-    free(poller);
+    delete[] poller->events;
+    delete poller;
 }
 
 looper::error add(const poller* poller, const os::descriptor descriptor, const event_types events) {
@@ -136,12 +137,12 @@ looper::error poll(poller* poller,
     event_data* events,
     size_t& event_count) {
     if (max_events > poller->events_buffer_size) {
-        auto* _events = static_cast<epoll_event*>(malloc(sizeof(epoll_event) * max_events));
+        auto* _events = new (std::nothrow) epoll_event[max_events];
         if (_events == nullptr) {
             return error_allocation;
         }
 
-        free(poller->events);
+        delete[] poller->events;
 
         poller->events_buffer_size = max_events;
         poller->events = _events;

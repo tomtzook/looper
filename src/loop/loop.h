@@ -5,16 +5,15 @@
 #include <mutex>
 #include <unordered_map>
 #include <condition_variable>
-#include <span>
 #include <chrono>
 #include <list>
 
 #include "looper_types.h"
 
+#include "os/os.h"
 #include "util/handles.h"
 #include "util/util.h"
 #include "types_internal.h"
-#include "os/meta.h"
 #include "loop.h"
 
 namespace looper::impl {
@@ -140,10 +139,10 @@ private:
 
     looper::loop m_handle;
     std::mutex m_mutex;
-    os::poller_ptr m_poller;
+    os::poller m_poller;
     std::chrono::milliseconds m_timeout;
-    os::event_ptr m_run_loop_event;
-    os::poll::event_data m_event_data[max_events_for_process];
+    os::event m_run_loop_event;
+    os::interface::poll::event_data m_event_data[max_events_for_process];
 
     bool m_stop;
     bool m_executing;

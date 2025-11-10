@@ -33,10 +33,11 @@ set(SOURCES
         src/util/util.h
         src/util/handles.h
         src/os/os_interface.h
-        src/os/meta.h
         src/loop/loop.h
         src/types_internal.h
         src/looper_base.h
+        src/loop/loop_unix_socket.h
+        src/os/os.h
 
         src/looper_base.cpp
         src/looper.cpp
@@ -44,9 +45,10 @@ set(SOURCES
         src/looper_udp.cpp
         src/trace.cpp
         src/loop/loop.cpp
+        src/loop/loop_io.h
+        src/loop/loop_io.cpp
         src/loop/loop_tcp.cpp
         src/loop/loop_udp.cpp
-        src/loop/loop_stream.cpp
         src/loop/loop_resource.cpp
         src/loop/loop_udp.h
         src/loop/loop_event.cpp
@@ -55,8 +57,6 @@ set(SOURCES
         src/loop/loop_future.cpp
         src/looper_types.cpp
         src/util/handles.cpp
-        src/loop/loop_unix_socket.h
-        src/os/os.h
 )
 
 if (UNIX)
@@ -89,3 +89,8 @@ install(EXPORT looper
         FILE looperConfig.cmake
         NAMESPACE looper::
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/looper")
+
+add_executable(client test_client1.cpp)
+target_link_libraries(client looper)
+add_executable(server test_server1.cpp)
+target_link_libraries(server looper)
