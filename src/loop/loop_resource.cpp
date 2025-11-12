@@ -94,6 +94,10 @@ void loop_resource::control::request_events(const event_types events, const even
     m_loop->request_resource_events(m_resource, events, type);
 }
 
+void loop_resource::control::invoke_in_loop(loop_callback&& callback) const {
+    m_loop->invoke_from_loop(std::move(callback));
+}
+
 loop_resource::loop_resource(loop_ptr loop)
     : m_loop(std::move(loop))
     , m_resource(empty_handle)

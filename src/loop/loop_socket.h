@@ -192,13 +192,12 @@ void base_socket_client<t_wr_, t_io_>::on_connect_done(std::unique_lock<std::mut
 
         control.state.set_read_enabled(true);
         control.state.set_write_enabled(true);
-
-        invoke_func<>(lock, "tcp_loop_callback", m_connect_callback, m_io.handle(), error);
+        control.invoke_in_loop<>(m_connect_callback, m_io.handle(), error);
     } else {
         m_state = state::open;
         control.state.mark_errored();
         looper_trace_error(loop_io_log_module, "tcp connection failed: handle=%lu, code=0x%x", m_io.handle(), error);
-        invoke_func<>(lock, "socket_client_loop_callback", m_connect_callback, m_io.handle(), error);
+        control.invoke_in_loop<>(m_connect_callback, m_io.handle(), error);
     }
 }
 

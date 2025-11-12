@@ -15,4 +15,8 @@ void io_control::request_events(const event_types events, const events_update_ty
     m_resource_control.request_events(events, type);
 }
 
+void io_control::invoke_in_loop(loop_callback&& callback) const {
+    m_resource_control.invoke_in_loop(std::move(callback));
+}
+
 }

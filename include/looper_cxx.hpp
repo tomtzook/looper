@@ -138,6 +138,25 @@ using tcp_holder = handle_holder<tcp, tcp_closer>;
 using tcp_server_holder = handle_holder<tcp_server, tcp_server_closer>;
 using udp_holder = handle_holder<udp, udp_closer>;
 
+#ifdef LOOPER_UNIX_SOCKETS
+
+struct unix_socket_closer {
+    void operator()(const handle handle) const {
+        destroy_unix_socket(handle);
+    }
+};
+
+struct unix_socket_server_closer {
+    void operator()(const handle handle) const {
+        destroy_unix_socket_server(handle);
+    }
+};
+
+using unix_socket_holder = handle_holder<unix_socket, unix_socket_closer>;
+using unix_socket_server_holder = handle_holder<unix_socket_server, unix_socket_server_closer>;
+
+#endif
+
 /**
  * Calls looper::create to create a new loop and returns it in a holder.
  * See the used function for more documentation.
@@ -207,5 +226,17 @@ inline tcp_server_holder make_tcp_server(const loop loop) {
 inline udp_holder make_udp(const loop loop) {
     return udp_holder(create_udp(loop));
 }
+
+#ifdef LOOPER_UNIX_SOCKETS
+
+inline unix_socket_holder make_unix_socket(const loop loop) {
+    return unix_socket_holder(create_unix_socket(loop));
+}
+
+inline unix_socket_server_holder make_unix_socket_server(const loop loop) {
+    return unix_socket_server_holder(create_unix_socket_server(loop));
+}
+
+#endif
 
 }

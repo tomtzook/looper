@@ -8,6 +8,7 @@ namespace looper::impl {
 #define log_module loop_log_module
 
 constexpr event_types must_have_events = event_error | event_hung;
+constexpr auto exec_later_wait_timeout = std::chrono::milliseconds(5000);
 
 loop::loop(const looper::loop handle)
     : m_handle(handle)
@@ -23,7 +24,12 @@ loop::loop(const looper::loop handle)
     , m_descriptor_map()
     , m_futures()
     , m_timers()
-    , m_updates() {
+    , m_updates()
+    , m_invoke_callbacks()
+    , m_execute_requests()
+    , m_completed_execute_requests()
+    , m_execute_request_completed()
+    , m_next_execute_request_id(0) {
     m_updates.resize(initial_reserve_size);
 
     looper_trace_info(log_module, "creating loop: handle=%lu", m_handle);
@@ -157,6 +163,46 @@ void loop::remove_timer(timer_data* data) {
     m_timers.remove(data);
 }
 
+std::pair<bool, looper::error> loop::execute_in_loop(execute_callback&& callback) {
+    auto [lock, locked] = lock_if_needed();
+    if (!locked) {
+        looper_trace_error(log_module, "execute_in_loop was unable to own a lock as it is held by the caller");
+        std::abort();
+    }
+
+    const auto id = m_next_execute_request_id;
+
+    m_execute_requests.emplace_back(id, false, false, error_success, std::move(callback));
+    signal_run();
+
+    looper::error result = error_success;
+    const auto done = m_execute_request_completed.wait_for(lock, exec_later_wait_timeout, [this, id, &result]()->bool {
+        bool found = false;
+        for (auto& request : m_completed_execute_requests) {
+            if (request.id == id) {
+                result = request.result;
+                request.can_remove = true;
+                found = true;
+                break;
+            }
+        }
+
+        return found;
+    });
+
+    if (!done) {
+        return {false, error_success};
+    }
+
+    return {true, result};
+}
+
+void loop::invoke_from_loop(loop_callback&& callback) {
+    auto [lock, _] = lock_if_needed();
+
+    m_invoke_callbacks.emplace_back(std::move(callback));
+}
+
 void loop::set_timeout_if_smaller(const std::chrono::milliseconds timeout) {
     auto [lock, _] = lock_if_needed();
 
@@ -186,7 +232,11 @@ void loop::signal_run() {
 }
 
 bool loop::run_once() {
-    std::unique_lock lock(m_mutex);
+    auto [lock, locked] = lock_if_needed();
+    if (!locked) {
+        looper_trace_error(log_module, "run_once was unable to own a lock as it is held by the caller");
+        std::abort();
+    }
 
     if (m_stop) {
         looper_trace_debug(log_module, "looper marked stop, not running");
@@ -223,6 +273,8 @@ bool loop::run_once() {
 
     process_timers(lock);
     process_futures(lock);
+    process_execute_requests(lock);
+    process_invokes(lock);
 
     looper_trace_debug(log_module, "finish looper run");
     m_executing = false;
@@ -329,6 +381,37 @@ void loop::process_updates() {
         process_update(update);
 
         m_updates.pop_front();
+    }
+}
+
+void loop::process_execute_requests(std::unique_lock<std::mutex>& lock) {
+    while (!m_execute_requests.empty()) {
+        auto& request = m_execute_requests.front();
+        request.result = invoke_func_r<>(lock, "execute_request_callback", request.callback);
+        request.can_remove = false;
+        request.did_finish = true;
+
+        m_completed_execute_requests.push_back(std::move(request));
+        m_execute_requests.pop_front();
+
+        m_execute_request_completed.notify_all();
+    }
+
+    for (auto it = m_completed_execute_requests.begin(); it != m_completed_execute_requests.end();) {
+        if (it->can_remove) {
+            it = m_completed_execute_requests.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void loop::process_invokes(std::unique_lock<std::mutex>& lock) {
+    while (!m_invoke_callbacks.empty()) {
+        auto& callback = m_invoke_callbacks.front();
+        invoke_func(lock, "loop_invoke_callback", callback);
+
+        m_invoke_callbacks.pop_front();
     }
 }
 

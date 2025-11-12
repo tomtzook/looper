@@ -36,6 +36,17 @@ struct io_control {
     io_control(resource_state& state, loop_resource::control resource_control);
 
     void request_events(event_types events, events_update_type type) const;
+    void invoke_in_loop(loop_callback&& callback) const;
+
+    template<typename... args_>
+    void invoke_in_loop(const std::function<void(args_...)>& ref, args_... args) const {
+        auto ref_val = ref;
+        if (ref_val != nullptr) {
+            invoke_in_loop([ref_val, args...]()->void {
+                ref_val(args...);
+            });
+        }
+    }
 
     resource_state& state;
 private:
@@ -262,6 +273,8 @@ void io<t_wr_, t_rd_, t_io_>::handle_read(std::unique_lock<std::mutex>& lock, co
     t_rd_ read_data{};
     read_data.buffer = std::span<uint8_t>{read_buffer, sizeof(read_buffer)};
     const auto error = m_io.read(read_data);
+    read_data.error = error;
+
     if (error == error_success) {
         read_data.buffer = std::span<uint8_t>{read_buffer, read_data.read_count};
         looper_trace_debug(loop_io_log_module, "stream read new data: handle=%lu, data_size=%lu", m_handle, read_data.buffer.size());

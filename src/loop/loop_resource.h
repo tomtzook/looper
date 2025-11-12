@@ -48,6 +48,7 @@ public:
         void attach_to_loop(os::descriptor descriptor, event_types events, handle_events_func&& handle_events);
         void detach_from_loop();
         void request_events(event_types events, events_update_type type) const;
+        void invoke_in_loop(loop_callback&& callback) const;
 
     private:
         loop_ptr m_loop;

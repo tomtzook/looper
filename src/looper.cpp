@@ -167,7 +167,6 @@ void exec_in_thread(loop loop) {
     data.thread = std::make_unique<std::thread>(&thread_main, loop);
 }
 
-// execute
 future create_future(const loop loop, future_callback&& callback) {
     std::unique_lock lock(get_global_loop_data().mutex);
     return create_future_internal(loop, std::move(callback));
@@ -214,7 +213,6 @@ bool execute_later_and_wait(const loop loop, loop_callback&& callback, const std
     return wait_for_future_internal(lock, future, timeout);
 }
 
-// events
 event create_event(const loop loop, event_callback&& callback) {
     std::unique_lock lock(get_global_loop_data().mutex);
 
