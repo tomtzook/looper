@@ -10,7 +10,7 @@ namespace looper::impl {
 constexpr event_type must_have_events = event_type::error | event_type::hung;
 constexpr auto exec_later_wait_timeout = std::chrono::milliseconds(5000);
 
-loop::loop(const looper::loop handle)
+loop::loop(const looper::loop handle) noexcept
     : m_handle(handle)
     , m_mutex()
     , m_poller(os::poller::create())
@@ -25,11 +25,7 @@ loop::loop(const looper::loop handle)
     , m_futures()
     , m_timers()
     , m_updates()
-    , m_invoke_callbacks()
-    , m_execute_requests()
-    , m_completed_execute_requests()
-    , m_execute_request_completed()
-    , m_next_execute_request_id(0) {
+    , m_invoke_callbacks() {
     m_updates.resize(initial_reserve_size);
 
     looper_trace_info(log_module, "creating loop: handle=%lu", m_handle);
@@ -41,7 +37,7 @@ loop::loop(const looper::loop handle)
                  });
 }
 
-loop::~loop() {
+loop::~loop() noexcept {
     std::unique_lock lock(m_mutex);
 
     looper_trace_info(log_module, "stopping looper");
@@ -62,7 +58,7 @@ loop::~loop() {
     return m_handle;
 }
 
-std::unique_lock<std::mutex> loop::lock_loop() {
+std::unique_lock<std::mutex> loop::lock_loop() noexcept {
     return std::unique_lock(m_mutex);
 }
 
@@ -70,12 +66,13 @@ resource loop::add_resource(
     os::descriptor descriptor,
     const event_type events,
     resource_callback&& callback,
-    void* user_ptr) {
+    void* user_ptr) noexcept {
     auto [lock, _1] = lock_if_needed();
 
     const auto it = m_descriptor_map.find(descriptor);
     if (it != m_descriptor_map.end()) {
-        throw std::runtime_error("resource already added");
+        looper_trace_error(log_module, "resource %u already added", descriptor);
+        std::abort();
     }
 
     auto [handle, data] = m_resource_table.allocate_new();
@@ -96,7 +93,7 @@ resource loop::add_resource(
     return handle;
 }
 
-void loop::remove_resource(const resource resource) {
+void loop::remove_resource(const resource resource) noexcept {
     auto [lock, _] = lock_if_needed();
 
     const auto data = m_resource_table.release(resource);
@@ -104,7 +101,7 @@ void loop::remove_resource(const resource resource) {
     looper_trace_debug(log_module, "removing resource: loop=%lu, handle=%lu", m_handle, resource);
 
     m_descriptor_map.erase(data->descriptor);
-    os::poller_remove(m_poller, data->descriptor);
+    ABORT_IF_ERROR(os::poller_remove(m_poller, data->descriptor));
 
     signal_run();
 }
@@ -112,7 +109,7 @@ void loop::remove_resource(const resource resource) {
 void loop::request_resource_events(
     const resource resource,
     const event_type events,
-    const events_update_type type) {
+    const events_update_type type) noexcept {
     auto [lock, _] = lock_if_needed();
 
     const auto& data = m_resource_table[resource];
@@ -129,7 +126,7 @@ void loop::request_resource_events(
             update_type = update::type_new_events_remove;
             break;
         default:
-            throw std::runtime_error("unsupported event type");
+            ABORT("unsupported update type");
     }
 
     looper_trace_debug(log_module, "modifying resource events: loop=%lu, handle=%lu, type=%d, events=0x%x",
@@ -139,71 +136,37 @@ void loop::request_resource_events(
     signal_run();
 }
 
-void loop::add_future(future_data* data) {
+void loop::add_future(future_data* data) noexcept {
     auto [lock, _] = lock_if_needed();
 
     m_futures.push_back(data);
 }
 
-void loop::remove_future(future_data* data) {
+void loop::remove_future(future_data* data) noexcept {
     auto [lock, _] = lock_if_needed();
 
     m_futures.remove(data);
 }
 
-void loop::add_timer(timer_data* data) {
+void loop::add_timer(timer_data* data) noexcept {
     auto [lock, _] = lock_if_needed();
 
     m_timers.push_back(data);
 }
 
-void loop::remove_timer(timer_data* data) {
+void loop::remove_timer(timer_data* data) noexcept {
     auto [lock, _] = lock_if_needed();
 
     m_timers.remove(data);
 }
 
-std::pair<bool, looper::error> loop::execute_in_loop(execute_callback&& callback) {
-    auto [lock, locked] = lock_if_needed();
-    if (!locked) {
-        looper_trace_error(log_module, "execute_in_loop was unable to own a lock as it is held by the caller");
-        std::abort();
-    }
-
-    const auto id = m_next_execute_request_id;
-
-    m_execute_requests.emplace_back(id, false, false, error_success, std::move(callback));
-    signal_run();
-
-    looper::error result = error_success;
-    const auto done = m_execute_request_completed.wait_for(lock, exec_later_wait_timeout, [this, id, &result]()->bool {
-        bool found = false;
-        for (auto& request : m_completed_execute_requests) {
-            if (request.id == id) {
-                result = request.result;
-                request.can_remove = true;
-                found = true;
-                break;
-            }
-        }
-
-        return found;
-    });
-
-    if (!done) {
-        return {false, error_success};
-    }
-
-    return {true, result};
-}
-
-void loop::invoke_from_loop(loop_callback&& callback) {
+void loop::invoke_from_loop(loop_callback&& callback) noexcept {
     auto [lock, _] = lock_if_needed();
 
     m_invoke_callbacks.emplace_back(std::move(callback));
 }
 
-void loop::set_timeout_if_smaller(const std::chrono::milliseconds timeout) {
+void loop::set_timeout_if_smaller(const std::chrono::milliseconds timeout) noexcept {
     auto [lock, _] = lock_if_needed();
 
     if (m_timeout > timeout) {
@@ -211,7 +174,7 @@ void loop::set_timeout_if_smaller(const std::chrono::milliseconds timeout) {
     }
 }
 
-void loop::reset_smallest_timeout() {
+void loop::reset_smallest_timeout() noexcept {
     auto [lock, _] = lock_if_needed();
 
     std::chrono::milliseconds timeout = initial_poll_timeout;
@@ -224,14 +187,14 @@ void loop::reset_smallest_timeout() {
     m_timeout = timeout;
 }
 
-void loop::signal_run() {
+void loop::signal_run() noexcept {
     auto [lock, _] = lock_if_needed();
 
     looper_trace_debug(log_module, "signalling loop run: loop=%lu", m_handle);
-    os::event_set(m_run_loop_event);
+    ABORT_IF_ERROR(os::event_set(m_run_loop_event));
 }
 
-bool loop::run_once() {
+bool loop::run_once() noexcept {
     auto [lock, locked] = lock_if_needed();
     if (!locked) {
         looper_trace_error(log_module, "run_once was unable to own a lock as it is held by the caller");
@@ -273,7 +236,6 @@ bool loop::run_once() {
 
     process_timers(lock);
     process_futures(lock);
-    process_execute_requests(lock);
     process_invokes(lock);
 
     looper_trace_debug(log_module, "finish looper run");
@@ -283,7 +245,7 @@ bool loop::run_once() {
     return m_stop;
 }
 
-void loop::process_timers(std::unique_lock<std::mutex>& lock) const {
+void loop::process_timers(std::unique_lock<std::mutex>& lock) const noexcept {
     std::vector<loop_timer_callback> to_call;
 
     const auto now = time_now();
@@ -305,7 +267,7 @@ void loop::process_timers(std::unique_lock<std::mutex>& lock) const {
     lock.lock();
 }
 
-void loop::process_futures(std::unique_lock<std::mutex>& lock) const {
+void loop::process_futures(std::unique_lock<std::mutex>& lock) const noexcept {
     std::vector<loop_future_callback> to_call;
 
     const auto now = time_now();
@@ -327,7 +289,7 @@ void loop::process_futures(std::unique_lock<std::mutex>& lock) const {
     lock.lock();
 }
 
-void loop::process_update(const update& update) {
+void loop::process_update(const update& update) noexcept {
     if (!m_resource_table.has(update.handle)) {
         return;
     }
@@ -337,45 +299,29 @@ void loop::process_update(const update& update) {
     switch (update.type) {
         case update::type_add: {
             data.events = update.events | must_have_events;
-            const auto status = os::poller_add(m_poller, data.descriptor, data.events);
-            if (status != error_success) {
-                looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
-                std::abort();
-            }
+            ABORT_IF_ERROR(os::poller_add(m_poller, data.descriptor, data.events));
             break;
         }
         case update::type_new_events: {
             data.events = update.events | must_have_events;
-            const auto status = os::poller_set(m_poller, data.descriptor, data.events);
-            if (status != error_success) {
-                looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
-                std::abort();
-            }
+            ABORT_IF_ERROR(os::poller_set(m_poller, data.descriptor, data.events));
             break;
         }
         case update::type_new_events_add: {
             data.events |= update.events | must_have_events;
-            const auto status = os::poller_set(m_poller, data.descriptor, data.events);
-            if (status != error_success) {
-                looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
-                std::abort();
-            }
+            ABORT_IF_ERROR(os::poller_set(m_poller, data.descriptor, data.events));
             break;
         }
         case update::type_new_events_remove: {
             data.events &= ~update.events;
             data.events |= must_have_events;
-            const auto status = os::poller_set(m_poller, data.descriptor, data.events);
-            if (status != error_success) {
-                looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
-                std::abort();
-            }
+            ABORT_IF_ERROR(os::poller_set(m_poller, data.descriptor, data.events));
             break;
         }
     }
 }
 
-void loop::process_updates() {
+void loop::process_updates() noexcept {
     while (!m_updates.empty()) {
         auto& update = m_updates.front();
         process_update(update);
@@ -384,29 +330,7 @@ void loop::process_updates() {
     }
 }
 
-void loop::process_execute_requests(std::unique_lock<std::mutex>& lock) {
-    while (!m_execute_requests.empty()) {
-        auto& request = m_execute_requests.front();
-        request.result = invoke_func_r<>(lock, "execute_request_callback", request.callback);
-        request.can_remove = false;
-        request.did_finish = true;
-
-        m_completed_execute_requests.push_back(std::move(request));
-        m_execute_requests.pop_front();
-
-        m_execute_request_completed.notify_all();
-    }
-
-    for (auto it = m_completed_execute_requests.begin(); it != m_completed_execute_requests.end();) {
-        if (it->can_remove) {
-            it = m_completed_execute_requests.erase(it);
-        } else {
-            ++it;
-        }
-    }
-}
-
-void loop::process_invokes(std::unique_lock<std::mutex>& lock) {
+void loop::process_invokes(std::unique_lock<std::mutex>& lock) noexcept {
     while (!m_invoke_callbacks.empty()) {
         auto& callback = m_invoke_callbacks.front();
         invoke_func(lock, "loop_invoke_callback", callback);
@@ -415,7 +339,7 @@ void loop::process_invokes(std::unique_lock<std::mutex>& lock) {
     }
 }
 
-void loop::process_events(std::unique_lock<std::mutex>& lock, const size_t event_count) {
+void loop::process_events(std::unique_lock<std::mutex>& lock, const size_t event_count) noexcept {
     for (int i = 0; i < event_count; i++) {
         auto& current_event_data = m_event_data[i];
 
@@ -424,11 +348,7 @@ void loop::process_events(std::unique_lock<std::mutex>& lock, const size_t event
             // make sure to remove this fd, guess it somehow was left over
             looper_trace_debug(log_module, "resource received events, but isn't attached to anything: fd=%lu", current_event_data.descriptor);
 
-            const auto status = os::poller_remove(m_poller, current_event_data.descriptor);
-            if (status != error_success) {
-                looper_trace_error(log_module, "failed to modify poller: code=%lu", status);
-                std::abort();
-            }
+            ABORT_IF_ERROR(os::poller_remove(m_poller, current_event_data.descriptor));
 
             continue;
         }
@@ -454,7 +374,7 @@ void loop::process_events(std::unique_lock<std::mutex>& lock, const size_t event
     }
 }
 
-std::pair<std::unique_lock<std::mutex>, bool> loop::lock_if_needed() {
+std::pair<std::unique_lock<std::mutex>, bool> loop::lock_if_needed() noexcept {
     std::unique_lock lock(m_mutex, std::defer_lock);
     const auto locked = lock.try_lock();
     return {std::move(lock), locked};

@@ -7,7 +7,7 @@ namespace looper::impl {
 
 #define log_module loop_log_module "_future"
 
-future::future(const looper::future handle, loop_ptr loop, future_callback&& callback)
+future::future(const looper::future handle, loop_ptr loop, future_callback&& callback) noexcept
     : m_handle(handle)
     , m_loop(std::move(loop))
     , m_callback(std::move(callback))
@@ -15,12 +15,12 @@ future::future(const looper::future handle, loop_ptr loop, future_callback&& cal
     , m_loop_data()
 {}
 
-future::~future() {
+future::~future() noexcept {
     auto lock = m_loop->lock_loop();
     m_loop->remove_future(&m_loop_data);
 }
 
-looper::error future::execute(const std::chrono::milliseconds delay) {
+looper::error future::execute(const std::chrono::milliseconds delay) noexcept {
     auto lock = m_loop->lock_loop();
 
     if (!m_loop_data.finished) {
@@ -43,7 +43,7 @@ looper::error future::execute(const std::chrono::milliseconds delay) {
     return error_success;
 }
 
-bool future::wait_for(std::unique_lock<std::mutex>& lock, const std::chrono::milliseconds timeout) {
+bool future::wait_for(std::unique_lock<std::mutex>& lock, const std::chrono::milliseconds timeout) noexcept {
     if (m_loop_data.finished) {
         looper_trace_debug(log_module, "future already finished, not waiting: loop=%lu, handle=%lu", m_loop->handle(), m_handle);
         return false;
@@ -56,7 +56,7 @@ bool future::wait_for(std::unique_lock<std::mutex>& lock, const std::chrono::mil
     });
 }
 
-void future::handle_events() {
+void future::handle_events() noexcept {
     auto lock = m_loop->lock_loop();
 
     m_loop->remove_future(&m_loop_data);

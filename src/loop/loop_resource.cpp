@@ -69,9 +69,9 @@ looper::impl::resource loop_resource::control::handle() const {
     return m_resource;
 }
 
-void loop_resource::control::attach_to_loop(const os::descriptor descriptor, const event_type events, handle_events_func&& handle_events) {
+void loop_resource::control::attach_to_loop(const os::descriptor descriptor, const event_type events, handle_events_func&& handle_events) noexcept {
     if (m_resource != empty_handle) {
-        throw std::runtime_error("already attached as resource");
+        ABORT("already attached as resource");
     }
 
     auto loop = m_loop;
@@ -87,18 +87,18 @@ void loop_resource::control::attach_to_loop(const os::descriptor descriptor, con
     });
 }
 
-void loop_resource::control::detach_from_loop() {
+void loop_resource::control::detach_from_loop() noexcept {
     if (m_resource != empty_handle) {
         m_loop->remove_resource(m_resource);
         m_resource = empty_handle;
     }
 }
 
-void loop_resource::control::request_events(const event_type events, const events_update_type type) const {
+void loop_resource::control::request_events(const event_type events, const events_update_type type) const noexcept {
     m_loop->request_resource_events(m_resource, events, type);
 }
 
-void loop_resource::control::invoke_in_loop(loop_callback&& callback) const {
+void loop_resource::control::invoke_in_loop(loop_callback&& callback) const noexcept {
     m_loop->invoke_from_loop(std::move(callback));
 }
 
@@ -134,7 +134,7 @@ looper::impl::resource loop_resource::handle() const {
     return m_resource;
 }
 
-std::pair<std::unique_lock<std::mutex>, loop_resource::control> loop_resource::lock_loop() {
+std::pair<std::unique_lock<std::mutex>, loop_resource::control> loop_resource::lock_loop() noexcept {
     auto lock = m_loop->lock_loop();
     return {std::move(lock), control(m_loop, m_resource)};
 }

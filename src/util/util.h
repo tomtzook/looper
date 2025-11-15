@@ -15,6 +15,20 @@
         } \
     } while (0)
 
+#define ABORT(msg, ...) \
+    do { \
+        looper_trace_error("critical", "aborting: " msg, ##__VA_ARGS__); \
+        std::abort(); \
+    } while (0)
+
+#define ABORT_IF_ERROR(...) \
+    do { \
+        const auto _err = __VA_ARGS__; \
+        if (_err) { \
+            ABORT("error returned 0x%x", _err); \
+        } \
+    } while (0)
+
 namespace looper {
 
 #define cbinvoke_log_module "callback_invoke"

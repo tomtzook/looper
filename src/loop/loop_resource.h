@@ -45,13 +45,13 @@ public:
 
         [[nodiscard]] looper::impl::resource handle() const;
 
-        void attach_to_loop(os::descriptor descriptor, event_type events, handle_events_func&& handle_events);
-        void detach_from_loop();
-        void request_events(event_type events, events_update_type type) const;
-        void invoke_in_loop(loop_callback&& callback) const;
+        void attach_to_loop(os::descriptor descriptor, event_type events, handle_events_func&& handle_events) noexcept;
+        void detach_from_loop() noexcept;
+        void request_events(event_type events, events_update_type type) const noexcept;
+        void invoke_in_loop(loop_callback&& callback) const noexcept;
 
         template<typename... args_>
-        void invoke_in_loop(const std::function<void(args_...)>& ref, args_... args) const {
+        void invoke_in_loop(const std::function<void(args_...)>& ref, args_... args) const noexcept {
             auto ref_val = ref;
             if (ref_val != nullptr) {
                 invoke_in_loop([ref_val, args...]()->void {
@@ -76,7 +76,7 @@ public:
 
     [[nodiscard]] looper::impl::resource handle() const;
 
-    std::pair<std::unique_lock<std::mutex>, control> lock_loop();
+    [[nodiscard]] std::pair<std::unique_lock<std::mutex>, control> lock_loop() noexcept;
 
 private:
     loop_ptr m_loop;

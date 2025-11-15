@@ -7,13 +7,13 @@ namespace looper::impl {
 
 class event final {
 public:
-    event(looper::event handle, const loop_ptr& loop, event_callback&& callback);
+    event(looper::event handle, const loop_ptr& loop, os::event&& event, event_callback&& callback) noexcept;
 
-    looper::error set();
-    looper::error clear();
+    [[nodiscard]] looper::error set() noexcept;
+    [[nodiscard]] looper::error clear() noexcept;
 
 private:
-    void handle_events(std::unique_lock<std::mutex>& lock, const loop_resource::control& control, event_type events) const;
+    void handle_events(std::unique_lock<std::mutex>& lock, const loop_resource::control& control, event_type events) const noexcept;
 
     looper::event m_handle;
     os::event m_event_obj;

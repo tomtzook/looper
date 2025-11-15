@@ -32,7 +32,7 @@ struct event_creator {
 };
 
 struct event_deleter {
-    void operator()(const interface::event::event* event) const {
+    void operator()(const interface::event::event* event) const noexcept {
         interface::event::close(event);
     }
 };
@@ -50,7 +50,7 @@ struct tcp_creator {
 };
 
 struct tcp_deleter {
-    void operator()(interface::tcp::tcp* tcp) const {
+    void operator()(interface::tcp::tcp* tcp) const noexcept {
         interface::tcp::close(tcp);
     }
 };
@@ -68,7 +68,7 @@ struct udp_creator {
 };
 
 struct udp_deleter {
-    void operator()(interface::udp::udp* udp) const {
+    void operator()(interface::udp::udp* udp) const noexcept {
         interface::udp::close(udp);
     }
 };
@@ -86,7 +86,7 @@ struct poller_creator {
 };
 
 struct poller_deleter {
-    void operator()(const interface::poll::poller* poller) const {
+    void operator()(const interface::poll::poller* poller) const noexcept {
         interface::poll::close(poller);
     }
 };
@@ -106,7 +106,7 @@ struct unix_socket_creator {
 };
 
 struct unix_socket_deleter {
-    void operator()(interface::unix_sock::unix_socket* skt) const {
+    void operator()(interface::unix_sock::unix_socket* skt) const noexcept {
         interface::unix_sock::close(skt);
     }
 };
@@ -127,12 +127,12 @@ public:
     os_object& operator=(const os_object&) = delete;
     os_object& operator=(os_object&&) = default;
 
-    explicit os_object(smart_ptr&& ptr) : m_ptr(std::move(ptr)) {}
+    explicit os_object(smart_ptr&& ptr) noexcept : m_ptr(std::move(ptr)) {}
 
     // ReSharper disable once CppNonExplicitConversionOperator
-    operator pointer() const { assert(m_ptr.get() != nullptr); return m_ptr.get(); } // NOLINT(*-explicit-constructor)
+    operator pointer() const noexcept { assert(m_ptr.get() != nullptr); return m_ptr.get(); } // NOLINT(*-explicit-constructor)
 
-    void close() { m_ptr.reset(); }
+    void close() noexcept { m_ptr.reset(); }
 
     static os_object create() {
         const auto obj = creator_()();
@@ -144,7 +144,7 @@ public:
     }
 
 private:
-    os_object() : m_ptr() {}
+    os_object() noexcept : m_ptr() {}
 
     smart_ptr m_ptr;
 };
@@ -185,40 +185,40 @@ concept connectable_socket_type = requires(t_ t, const t_& f1_type) {
 
 template<>
 struct os_descriptor<event> {
-    static os::descriptor get(const event& obj) {
+    static os::descriptor get(const event& obj) noexcept {
         return interface::event::get_descriptor(obj);
     }
 };
 
 template<>
 struct os_descriptor<tcp> {
-    static os::descriptor get(const tcp& obj) {
+    static os::descriptor get(const tcp& obj) noexcept {
         return interface::tcp::get_descriptor(obj);
     }
 };
 
 template<>
 struct os_socket<tcp> {
-    static looper::error ipv4_bind(const tcp& obj, const std::string_view ip, const uint16_t port) {
+    static looper::error ipv4_bind(const tcp& obj, const std::string_view ip, const uint16_t port) noexcept {
         return interface::tcp::bind(obj, ip, port);
     }
-    static looper::error ipv4_bind(const tcp& obj, const uint16_t port) {
+    static looper::error ipv4_bind(const tcp& obj, const uint16_t port) noexcept {
         return interface::tcp::bind(obj, port);
     }
-    static looper::error ipv4_connect(const tcp& obj, const std::string_view ip, const uint16_t port) {
+    static looper::error ipv4_connect(const tcp& obj, const std::string_view ip, const uint16_t port) noexcept {
         return interface::tcp::connect(obj, ip, port);
     }
-    static looper::error finalize_connect(const tcp& obj) {
+    static looper::error finalize_connect(const tcp& obj) noexcept {
         return interface::tcp::finalize_connect(obj);
     }
 };
 
 template<>
 struct os_socket_server<tcp> {
-    static looper::error socket_accept(const tcp& obj, const size_t backlog) {
+    static looper::error socket_accept(const tcp& obj, const size_t backlog) noexcept {
         return interface::tcp::listen(obj, backlog);
     }
-    static std::pair<looper::error, tcp> socket_accept(const tcp& obj) {
+    static std::pair<looper::error, tcp> socket_accept(const tcp& obj) noexcept {
         interface::tcp::tcp* new_tcp;
         const auto status = interface::tcp::accept(obj, &new_tcp);
         if (status != error_success) {
@@ -231,27 +231,27 @@ struct os_socket_server<tcp> {
 
 template<>
 struct os_stream<tcp> {
-    static looper::error read(const tcp& obj, std::span<uint8_t> buffer, size_t& read_out) {
+    static looper::error read(const tcp& obj, std::span<uint8_t> buffer, size_t& read_out) noexcept {
         return interface::tcp::read(obj, buffer.data(), buffer.size(), read_out);
     }
-    static looper::error write(const tcp& obj, const std::span<const uint8_t> buffer, size_t& written_out) {
+    static looper::error write(const tcp& obj, const std::span<const uint8_t> buffer, size_t& written_out) noexcept {
         return interface::tcp::write(obj, buffer.data(), buffer.size(), written_out);
     }
 };
 
 template<>
 struct os_descriptor<udp> {
-    static os::descriptor get(const udp& obj) {
+    static os::descriptor get(const udp& obj) noexcept {
         return interface::udp::get_descriptor(obj);
     }
 };
 
 template<>
 struct os_socket<udp> {
-    static looper::error ipv4_bind(const udp& obj, const std::string_view ip, const uint16_t port) {
+    static looper::error ipv4_bind(const udp& obj, const std::string_view ip, const uint16_t port) noexcept {
         return interface::udp::bind(obj, ip, port);
     }
-    static looper::error ipv4_bind(const udp& obj, const uint16_t port) {
+    static looper::error ipv4_bind(const udp& obj, const uint16_t port) noexcept {
         return interface::udp::bind(obj, port);
     }
 };
@@ -260,30 +260,30 @@ struct os_socket<udp> {
 
 template<>
 struct os_descriptor<unix_socket> {
-    static os::descriptor get(const unix_socket& obj) {
+    static os::descriptor get(const unix_socket& obj) noexcept {
         return interface::unix_sock::get_descriptor(obj);
     }
 };
 
 template<>
 struct os_socket<unix_socket> {
-    static looper::error unix_bind(const unix_socket& obj, const std::string_view path) {
+    static looper::error unix_bind(const unix_socket& obj, const std::string_view path) noexcept {
         return interface::unix_sock::bind(obj, path);
     }
-    static looper::error unix_connect(const unix_socket& obj, const std::string_view path) {
+    static looper::error unix_connect(const unix_socket& obj, const std::string_view path) noexcept {
         return interface::unix_sock::connect(obj, path);
     }
-    static looper::error finalize_connect(const unix_socket& obj) {
+    static looper::error finalize_connect(const unix_socket& obj) noexcept {
         return interface::unix_sock::finalize_connect(obj);
     }
 };
 
 template<>
 struct os_socket_server<unix_socket> {
-    static looper::error socket_accept(const unix_socket& obj, const size_t backlog) {
+    static looper::error socket_accept(const unix_socket& obj, const size_t backlog) noexcept {
         return interface::unix_sock::listen(obj, backlog);
     }
-    static std::pair<looper::error, unix_socket> socket_accept(const unix_socket& obj) {
+    static std::pair<looper::error, unix_socket> socket_accept(const unix_socket& obj) noexcept {
         interface::unix_sock::unix_socket* new_obj;
         const auto status = interface::unix_sock::accept(obj, &new_obj);
         if (status != error_success) {
@@ -296,10 +296,10 @@ struct os_socket_server<unix_socket> {
 
 template<>
 struct os_stream<unix_socket> {
-    static looper::error read(const unix_socket& obj, std::span<uint8_t> buffer, size_t& read_out) {
+    static looper::error read(const unix_socket& obj, std::span<uint8_t> buffer, size_t& read_out) noexcept {
         return interface::unix_sock::read(obj, buffer.data(), buffer.size(), read_out);
     }
-    static looper::error write(const unix_socket& obj, const std::span<const uint8_t> buffer, size_t& written_out) {
+    static looper::error write(const unix_socket& obj, const std::span<const uint8_t> buffer, size_t& written_out) noexcept {
         return interface::unix_sock::write(obj, buffer.data(), buffer.size(), written_out);
     }
 };
@@ -320,88 +320,88 @@ concept os_stream_type = requires(t_ t) {
 // todo: shrink scopes here with concepts
 
 template<os_object_type t_>
-os::descriptor get_descriptor(const t_& t) {
+[[nodiscard]] os::descriptor get_descriptor(const t_& t) noexcept {
     return detail::os_descriptor<t_>::get(t);
 }
 
-inline looper::error event_set(const event& obj) {
+[[nodiscard]] inline looper::error event_set(const event& obj) noexcept {
     return interface::event::set(obj);
 }
 
-inline looper::error event_clear(const event& obj) {
+[[nodiscard]] inline looper::error event_clear(const event& obj) noexcept {
     return interface::event::clear(obj);
 }
 
-inline looper::error poller_add(const poller& obj, const os::descriptor descriptor, const event_type events) {
+[[nodiscard]] inline looper::error poller_add(const poller& obj, const os::descriptor descriptor, const event_type events) noexcept {
     return interface::poll::add(obj, descriptor, events);
 }
 
-inline looper::error poller_remove(const poller& obj, const os::descriptor descriptor) {
+[[nodiscard]] inline looper::error poller_remove(const poller& obj, const os::descriptor descriptor) noexcept {
     return interface::poll::remove(obj, descriptor);
 }
 
-inline looper::error poller_set(const poller& obj, const os::descriptor descriptor, const event_type events) {
+[[nodiscard]] inline looper::error poller_set(const poller& obj, const os::descriptor descriptor, const event_type events) noexcept {
     return interface::poll::set(obj, descriptor, events);
 }
 
-inline looper::error poller_poll(
+[[nodiscard]] inline looper::error poller_poll(
     const poller& obj,
     const size_t max_events,
     const std::chrono::milliseconds timeout,
     interface::poll::event_data* events,
-    size_t& event_count) {
+    size_t& event_count) noexcept {
     return interface::poll::poll(obj, max_events, timeout, events, event_count);
 }
 
 template<os_object_type t_>
-looper::error ipv4_bind(const t_& t, const std::string_view ip, const uint16_t port) {
+[[nodiscard]] looper::error ipv4_bind(const t_& t, const std::string_view ip, const uint16_t port) noexcept {
     return detail::os_socket<t_>::ipv4_bind(t, ip, port);
 }
 
 template<os_object_type t_>
-looper::error ipv4_bind(const t_& t, const uint16_t port) {
+[[nodiscard]] looper::error ipv4_bind(const t_& t, const uint16_t port) noexcept {
     return detail::os_socket<t_>::ipv4_bind(t, port);
 }
 
 template<os_object_type t_>
-looper::error ipv4_connect(const t_& t, const std::string_view ip, const uint16_t port) {
+[[nodiscard]] looper::error ipv4_connect(const t_& t, const std::string_view ip, const uint16_t port) noexcept {
     return detail::os_socket<t_>::ipv4_connect(t, ip, port);
 }
 
 template<os_object_type t_>
-looper::error finalize_connect(const t_& t) {
+[[nodiscard]] looper::error finalize_connect(const t_& t) noexcept {
     return detail::os_socket<t_>::finalize_connect(t);
 }
 
 template<os_object_type t_>
-looper::error socket_listen(const t_& t, const size_t backlog) {
+[[nodiscard]] looper::error socket_listen(const t_& t, const size_t backlog) noexcept {
     return detail::os_socket_server<t_>::socket_accept(t, backlog);
 }
 
 template<os_object_type t_>
-std::pair<looper::error, t_> socket_accept(const t_& t) {
+[[nodiscard]] std::pair<looper::error, t_> socket_accept(const t_& t) noexcept {
     return detail::os_socket_server<t_>::socket_accept(t);
 }
 
 template<os_stream_type t_>
-looper::error stream_read(const t_& t, std::span<uint8_t> buffer, size_t& read_out) {
+[[nodiscard]] looper::error stream_read(const t_& t, std::span<uint8_t> buffer, size_t& read_out) noexcept {
     return detail::os_stream<t_>::read(t, buffer, read_out);
 }
 
 template<os_stream_type t_>
-looper::error stream_write(const t_& t, const std::span<const uint8_t> buffer, size_t& written_out) {
+[[nodiscard]] looper::error stream_write(const t_& t, const std::span<const uint8_t> buffer, size_t& written_out) noexcept {
     return detail::os_stream<t_>::write(t, buffer, written_out);
 }
 
 #ifdef LOOPER_UNIX_SOCKETS
 
 template<os_object_type t_>
-looper::error unix_bind(const t_& t, const std::string_view path) {
+[[nodiscard]] looper::error unix_bind(const t_& t, const std::string_view path) noexcept {
     return detail::os_socket<t_>::unix_bind(t, path);
 }
 
 template<os_object_type t_>
-looper::error unix_connect(const t_& t, const std::string_view path) {
+[[nodiscard]] looper::error unix_connect(const t_& t, const std::string_view path) noexcept {
     return detail::os_socket<t_>::unix_connect(t, path);
 }
 

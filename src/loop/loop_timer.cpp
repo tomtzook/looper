@@ -5,7 +5,7 @@ namespace looper::impl {
 
 #define log_module loop_log_module "_timer"
 
-timer::timer(const looper::timer handle, loop_ptr loop, timer_callback&& callback, const std::chrono::milliseconds timeout)
+timer::timer(const looper::timer handle, loop_ptr loop, timer_callback&& callback, const std::chrono::milliseconds timeout) noexcept
     : m_handle(handle)
     , m_loop(std::move(loop))
     , m_running(false)
@@ -14,7 +14,7 @@ timer::timer(const looper::timer handle, loop_ptr loop, timer_callback&& callbac
     , m_loop_data()
 {}
 
-looper::error timer::start() {
+looper::error timer::start() noexcept {
     auto lock = m_loop->lock_loop();
 
     if (m_timeout < min_poll_timeout) {
@@ -43,7 +43,7 @@ looper::error timer::start() {
     return error_success;
 }
 
-void timer::stop() {
+void timer::stop() noexcept {
     auto lock = m_loop->lock_loop();
 
     if (!m_running) {
@@ -58,7 +58,7 @@ void timer::stop() {
     m_loop->reset_smallest_timeout();
 }
 
-void timer::reset() {
+void timer::reset() noexcept {
     auto lock = m_loop->lock_loop();
     if (!m_running) {
         return;
@@ -70,7 +70,7 @@ void timer::reset() {
     looper_trace_info(log_module, "resetting timer: handle=%lu, next_time=%lu", m_handle, m_loop_data.next_timestamp.count());
 }
 
-void timer::handle_events() const {
+void timer::handle_events() const noexcept {
     auto lock = m_loop->lock_loop();
     invoke_func(lock, "timer_callback", m_callback, m_handle);
 }

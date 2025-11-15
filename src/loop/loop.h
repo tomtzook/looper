@@ -23,7 +23,6 @@ class loop;
 
 using resource = handle;
 using resource_callback = std::function<void(resource, void*, event_type)>;
-using execute_callback = std::function<looper::error()>;
 using loop_callback = std::function<void()>;
 using loop_timer_callback = std::function<void()>;
 using loop_future_callback = std::function<void()>;
@@ -96,18 +95,10 @@ struct update {
     event_type events;
 };
 
-struct execute_request {
-    uint64_t id;
-    bool did_finish;
-    bool can_remove;
-    looper::error result;
-    execute_callback callback;
-};
-
 class loop {
 public:
-    explicit loop(looper::loop handle);
-    ~loop();
+    explicit loop(looper::loop handle) noexcept;
+    ~loop() noexcept;
 
     loop(loop&) = delete;
     loop(loop&&) = delete;
@@ -116,40 +107,38 @@ public:
 
     [[nodiscard]] looper::loop handle() const;
 
-    std::unique_lock<std::mutex> lock_loop();
+    std::unique_lock<std::mutex> lock_loop() noexcept;
 
     resource add_resource(os::descriptor descriptor,
                           event_type events,
                           resource_callback&& callback,
-                          void* user_ptr = nullptr);
-    void remove_resource(resource resource);
-    void request_resource_events(resource resource, event_type events, events_update_type type);
+                          void* user_ptr = nullptr) noexcept;
+    void remove_resource(resource resource) noexcept;
+    void request_resource_events(resource resource, event_type events, events_update_type type) noexcept;
 
-    void add_future(future_data* data);
-    void remove_future(future_data* data);
-    void add_timer(timer_data* data);
-    void remove_timer(timer_data* data);
+    void add_future(future_data* data) noexcept;
+    void remove_future(future_data* data) noexcept;
+    void add_timer(timer_data* data) noexcept;
+    void remove_timer(timer_data* data) noexcept;
 
-    std::pair<bool, looper::error> execute_in_loop(execute_callback&& callback);
-    void invoke_from_loop(loop_callback&& callback);
+    void invoke_from_loop(loop_callback&& callback) noexcept;
 
-    void set_timeout_if_smaller(std::chrono::milliseconds timeout);
-    void reset_smallest_timeout();
-    void signal_run();
+    void set_timeout_if_smaller(std::chrono::milliseconds timeout) noexcept;
+    void reset_smallest_timeout() noexcept;
+    void signal_run() noexcept;
 
     // loop cannot be locked by current thread when this is called
-    bool run_once();
+    bool run_once() noexcept;
 
 private:
-    void process_timers(std::unique_lock<std::mutex>& lock) const;
-    void process_futures(std::unique_lock<std::mutex>& lock) const;
-    void process_update(const update& update);
-    void process_updates();
-    void process_execute_requests(std::unique_lock<std::mutex>& lock);
-    void process_invokes(std::unique_lock<std::mutex>& lock);
-    void process_events(std::unique_lock<std::mutex>& lock, size_t event_count);
+    void process_timers(std::unique_lock<std::mutex>& lock) const noexcept;
+    void process_futures(std::unique_lock<std::mutex>& lock) const noexcept;
+    void process_update(const update& update) noexcept;
+    void process_updates() noexcept;
+    void process_invokes(std::unique_lock<std::mutex>& lock) noexcept;
+    void process_events(std::unique_lock<std::mutex>& lock, size_t event_count) noexcept;
 
-    std::pair<std::unique_lock<std::mutex>, bool> lock_if_needed();
+    std::pair<std::unique_lock<std::mutex>, bool> lock_if_needed() noexcept;
 
     looper::loop m_handle;
     std::mutex m_mutex;
@@ -168,11 +157,6 @@ private:
     std::list<timer_data*> m_timers;
     std::deque<update> m_updates;
     std::deque<loop_callback> m_invoke_callbacks;
-
-    std::deque<execute_request> m_execute_requests;
-    std::list<execute_request> m_completed_execute_requests;
-    std::condition_variable m_execute_request_completed;
-    uint64_t m_next_execute_request_id;
 };
 
 std::chrono::milliseconds time_now();

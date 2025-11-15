@@ -218,7 +218,8 @@ event create_event(const loop loop, event_callback&& callback) {
 
     auto& data = get_loop(loop);
 
-    auto [handle, event_data] = data.events.allocate_new(data.loop, std::move(callback));
+    auto obj = os::event::create();
+    auto [handle, event_data] = data.events.allocate_new(data.loop, std::move(obj), std::move(callback));
     looper_trace_info(log_module, "created new event: loop=%lu, handle=%lu", loop, handle);
     data.events.assign(handle, std::move(event_data));
 

@@ -1,4 +1,6 @@
 
+#ifdef LOOPER_UNIX_SOCKETS
+
 #include "looper_base.h"
 
 namespace looper {
@@ -10,7 +12,8 @@ unix_socket create_unix_socket(const loop loop) {
 
     auto& data = get_loop(loop);
 
-    auto [handle, unix_socket_impl] = data.unix_sockets.allocate_new(data.loop);
+    auto obj = os::unix_socket::create();
+    auto [handle, unix_socket_impl] = data.unix_sockets.allocate_new(data.loop, std::move(obj));
     looper_trace_info(log_module, "created new unix_socket: loop=%lu, handle=%lu", data.handle, handle);
     data.unix_sockets.assign(handle, std::move(unix_socket_impl));
 
@@ -98,7 +101,8 @@ unix_socket_server create_unix_socket_server(const loop loop) {
 
     auto& data = get_loop(loop);
 
-    auto [handle, unix_socket_impl] = data.unix_socket_servers.allocate_new(data.loop);
+    auto obj = os::unix_socket::create();
+    auto [handle, unix_socket_impl] = data.unix_socket_servers.allocate_new(data.loop, std::move(obj));
     looper_trace_info(log_module, "creating new unix_socket server: loop=%lu, handle=%lu", data.handle, handle);
     data.unix_socket_servers.assign(handle, std::move(unix_socket_impl));
 
@@ -158,3 +162,5 @@ unix_socket accept_unix_socket(const unix_socket_server unix_socket) {
 }
 
 }
+
+#endif

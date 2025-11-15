@@ -6,13 +6,14 @@ namespace looper::impl {
 
 class future final {
 public:
-    future(looper::future handle, loop_ptr loop, future_callback&& callback);
-    ~future();
+    future(looper::future handle, loop_ptr loop, future_callback&& callback) noexcept;
+    ~future() noexcept;
 
-    looper::error execute(std::chrono::milliseconds delay);
-    bool wait_for(std::unique_lock<std::mutex>& lock, std::chrono::milliseconds timeout);
+    [[nodiscard]] looper::error execute(std::chrono::milliseconds delay) noexcept;
+    [[nodiscard]] bool wait_for(std::unique_lock<std::mutex>& lock, std::chrono::milliseconds timeout) noexcept;
+
 private:
-    void handle_events();
+    void handle_events() noexcept;
 
     looper::future m_handle;
     loop_ptr m_loop;

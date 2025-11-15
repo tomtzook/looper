@@ -6,14 +6,14 @@ namespace looper::impl {
 
 class timer final {
 public:
-    timer(looper::timer handle, loop_ptr loop, timer_callback&& callback, std::chrono::milliseconds timeout);
+    timer(looper::timer handle, loop_ptr loop, timer_callback&& callback, std::chrono::milliseconds timeout) noexcept;
 
-    looper::error start();
-    void stop();
-    void reset();
+    [[nodiscard]] looper::error start() noexcept;
+    void stop() noexcept;
+    void reset() noexcept;
 
 private:
-    void handle_events() const;
+    void handle_events() const noexcept;
 
     looper::timer m_handle;
     loop_ptr m_loop;

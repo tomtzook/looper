@@ -40,18 +40,7 @@ concept connectable_io_type = io_type<t_, wr_t_, rd_t_> && requires(t_ t) {
 struct io_control {
     io_control(resource_state& state, loop_resource::control resource_control);
 
-    void request_events(event_type events, events_update_type type) const;
-    void invoke_in_loop(loop_callback&& callback) const;
-
-    template<typename... args_>
-    void invoke_in_loop(const std::function<void(args_...)>& ref, args_... args) const {
-        auto ref_val = ref;
-        if (ref_val != nullptr) {
-            invoke_in_loop([ref_val, args...]()->void {
-                ref_val(args...);
-            });
-        }
-    }
+    void request_events(event_type events, events_update_type type) const noexcept;
 
     resource_state& state;
 private:
@@ -67,25 +56,25 @@ struct base_io final {
     using io_type = t_io_;
     using read_callback = std::function<void(looper::handle, const t_rd_&)>;
 
-    base_io(looper::handle handle, const loop_ptr& loop, io_type&& io_obj);
+    base_io(looper::handle handle, const loop_ptr& loop, io_type&& io_obj) noexcept;
 
     base_io(const base_io&) = delete;
     base_io(base_io&&) = default;
     base_io& operator=(const base_io&) = delete;
     base_io& operator=(base_io&&) = default;
 
-    looper::error start_read(read_callback&& callback);
-    looper::error stop_read();
-    looper::error write(write_request&& request);
+    [[nodiscard]] looper::error start_read(read_callback&& callback) noexcept;
+    [[nodiscard]] looper::error stop_read() noexcept;
+    [[nodiscard]] looper::error write(write_request&& request) noexcept;
 
-    void close();
+    void close() noexcept;
 
-    void handle_read(std::unique_lock<std::mutex>& lock, const loop_resource::control& control);
-    void handle_write(std::unique_lock<std::mutex>& lock, const loop_resource::control& control);
-    void handle_connect(std::unique_lock<std::mutex>& lock, const loop_resource::control& control) requires connectable_io_type<t_io_, t_wr_, t_rd_>;
-    void on_connect_done(std::unique_lock<std::mutex>& lock, const loop_resource::control& control, error error = error_success) requires connectable_io_type<t_io_, t_wr_, t_rd_>;
-    void report_write_requests_finished(std::unique_lock<std::mutex>& lock);
-    bool do_write();
+    void handle_read(std::unique_lock<std::mutex>& lock, const loop_resource::control& control) noexcept;
+    void handle_write(std::unique_lock<std::mutex>& lock, const loop_resource::control& control) noexcept;
+    void handle_connect(std::unique_lock<std::mutex>& lock, const loop_resource::control& control) noexcept requires connectable_io_type<t_io_, t_wr_, t_rd_>;
+    void on_connect_done(std::unique_lock<std::mutex>& lock, const loop_resource::control& control, error error = error_success) noexcept requires connectable_io_type<t_io_, t_wr_, t_rd_>;
+    void report_write_requests_finished(std::unique_lock<std::mutex>& lock) noexcept;
+    bool do_write() noexcept;
 
     const looper::handle m_handle;
     io_type m_io;
@@ -112,7 +101,7 @@ public:
     using read_callback = std::function<void(looper::handle, const t_rd_&)>;
     using connector = std::function<looper::error(const io_type&)>;
 
-    io(looper::handle handle, const loop_ptr& loop, t_io_&& io_obj);
+    io(looper::handle handle, const loop_ptr& loop, t_io_&& io_obj) noexcept;
 
     io(const io&) = delete;
     io(io&&) = default;
@@ -122,22 +111,22 @@ public:
     [[nodiscard]] looper::handle handle() const;
     [[nodiscard]] const io_type& io_obj() const;
 
-    std::pair<std::unique_lock<std::mutex>, io_control> use();
+    [[nodiscard]] std::pair<std::unique_lock<std::mutex>, io_control> use() noexcept;
 
-    void register_to_loop();
+    void register_to_loop() noexcept;
 
-    looper::error mark_connected() requires connectable_io_type<t_io_, t_wr_, t_rd_>;
-    looper::error connect(connector&& connector, connect_callback&& callback) requires connectable_io_type<t_io_, t_wr_, t_rd_>;
+    [[nodiscard]] looper::error mark_connected() noexcept requires connectable_io_type<t_io_, t_wr_, t_rd_>;
+    [[nodiscard]] looper::error connect(connector&& connector, connect_callback&& callback) noexcept requires connectable_io_type<t_io_, t_wr_, t_rd_>;
 
-    looper::error start_read(read_callback&& callback);
-    looper::error stop_read();
-    looper::error write(write_request&& request);
+    [[nodiscard]] looper::error start_read(read_callback&& callback) noexcept;
+    [[nodiscard]] looper::error stop_read() noexcept;
+    [[nodiscard]] looper::error write(write_request&& request) noexcept;
 
     // todo: return errors if closed in other funcs
-    void close();
+    void close() noexcept;
 
 private:
-    void handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control& control, event_type events);
+    void handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control& control, event_type events) noexcept;
 
     base m_base;
 };
@@ -147,7 +136,7 @@ private:
 // BASE_IO ---------------------------------------------------------
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-base_io<t_wr_, t_rd_, t_io_>::base_io(const looper::handle handle, const loop_ptr& loop, io_type&& io_obj)
+base_io<t_wr_, t_rd_, t_io_>::base_io(const looper::handle handle, const loop_ptr& loop, io_type&& io_obj) noexcept
     : m_handle(handle)
     , m_io(std::move(io_obj))
     , m_resource(loop)
@@ -162,7 +151,7 @@ base_io<t_wr_, t_rd_, t_io_>::base_io(const looper::handle handle, const loop_pt
 {}
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-looper::error base_io<t_wr_, t_rd_, t_io_>::start_read(read_callback&& callback) {
+looper::error base_io<t_wr_, t_rd_, t_io_>::start_read(read_callback&& callback) noexcept {
     auto [lock, control] = m_resource.lock_loop();
     RETURN_IF_ERROR(m_state.verify_not_errored());
     RETURN_IF_ERROR(m_state.verify_not_reading());
@@ -177,7 +166,7 @@ looper::error base_io<t_wr_, t_rd_, t_io_>::start_read(read_callback&& callback)
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-looper::error base_io<t_wr_, t_rd_, t_io_>::stop_read() {
+looper::error base_io<t_wr_, t_rd_, t_io_>::stop_read() noexcept {
     auto [lock, control] = m_resource.lock_loop();
 
     if (!m_state.is_reading()) {
@@ -193,7 +182,7 @@ looper::error base_io<t_wr_, t_rd_, t_io_>::stop_read() {
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-looper::error base_io<t_wr_, t_rd_, t_io_>::write(write_request&& request) {
+looper::error base_io<t_wr_, t_rd_, t_io_>::write(write_request&& request) noexcept {
     auto [lock, control] = m_resource.lock_loop();
     RETURN_IF_ERROR(m_state.verify_not_errored());
 
@@ -210,7 +199,7 @@ looper::error base_io<t_wr_, t_rd_, t_io_>::write(write_request&& request) {
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-void base_io<t_wr_, t_rd_, t_io_>::close() {
+void base_io<t_wr_, t_rd_, t_io_>::close() noexcept {
     auto [lock, control] = m_resource.lock_loop();
 
     m_io.close();
@@ -218,7 +207,7 @@ void base_io<t_wr_, t_rd_, t_io_>::close() {
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-void base_io<t_wr_, t_rd_, t_io_>::handle_read(std::unique_lock<std::mutex>& lock, const loop_resource::control& control) {
+void base_io<t_wr_, t_rd_, t_io_>::handle_read(std::unique_lock<std::mutex>& lock, const loop_resource::control& control) noexcept {
     if (!m_state.is_reading() || m_state.is_errored() || !m_state.can_read()) {
         control.request_events(event_type::in, events_update_type::remove);
         return;
@@ -242,7 +231,7 @@ void base_io<t_wr_, t_rd_, t_io_>::handle_read(std::unique_lock<std::mutex>& loc
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-void base_io<t_wr_, t_rd_, t_io_>::handle_write(std::unique_lock<std::mutex>& lock, const loop_resource::control& control) {
+void base_io<t_wr_, t_rd_, t_io_>::handle_write(std::unique_lock<std::mutex>& lock, const loop_resource::control& control) noexcept {
     if (!m_write_pending || m_state.is_errored() || !m_state.can_write()) {
         control.request_events(event_type::out, events_update_type::remove);
         return;
@@ -263,7 +252,10 @@ void base_io<t_wr_, t_rd_, t_io_>::handle_write(std::unique_lock<std::mutex>& lo
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-void base_io<t_wr_, t_rd_, t_io_>::handle_connect(std::unique_lock<std::mutex>& lock, const loop_resource::control& control) requires connectable_io_type<t_io_, t_wr_, t_rd_> {
+void base_io<t_wr_, t_rd_, t_io_>::handle_connect(
+    std::unique_lock<std::mutex>& lock,
+    const loop_resource::control& control) noexcept
+    requires connectable_io_type<t_io_, t_wr_, t_rd_> {
     // finish connect
     const auto error = m_io.finalize_connect();
     control.request_events(event_type::out, events_update_type::remove);
@@ -271,7 +263,11 @@ void base_io<t_wr_, t_rd_, t_io_>::handle_connect(std::unique_lock<std::mutex>& 
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-void base_io<t_wr_, t_rd_, t_io_>::on_connect_done(std::unique_lock<std::mutex>& lock, const loop_resource::control& control, const error error) requires connectable_io_type<t_io_, t_wr_, t_rd_> {
+void base_io<t_wr_, t_rd_, t_io_>::on_connect_done(
+    std::unique_lock<std::mutex>& lock,
+    const loop_resource::control& control,
+    const error error) noexcept
+    requires connectable_io_type<t_io_, t_wr_, t_rd_> {
     if (error == error_success) {
         // connection finished
         looper_trace_info(loop_io_log_module, "connected tcp: handle=%lu", m_handle);
@@ -287,7 +283,8 @@ void base_io<t_wr_, t_rd_, t_io_>::on_connect_done(std::unique_lock<std::mutex>&
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-void base_io<t_wr_, t_rd_, t_io_>::report_write_requests_finished(std::unique_lock<std::mutex>& lock) {
+void base_io<t_wr_, t_rd_, t_io_>::report_write_requests_finished(
+    std::unique_lock<std::mutex>& lock) noexcept {
     while (!m_completed_write_requests.empty()) {
         auto& request = m_completed_write_requests.front();
         invoke_func<>(lock, "loop_io_log_module", request.write_callback, m_handle, request.error);
@@ -297,7 +294,7 @@ void base_io<t_wr_, t_rd_, t_io_>::report_write_requests_finished(std::unique_lo
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-bool base_io<t_wr_, t_rd_, t_io_>::do_write() {
+bool base_io<t_wr_, t_rd_, t_io_>::do_write() noexcept {
     // todo: better use of queues
     // todo: use iovec
 
@@ -343,7 +340,8 @@ bool base_io<t_wr_, t_rd_, t_io_>::do_write() {
 // BASE_IO ---------------------------------------------------------
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-io<t_wr_, t_rd_, t_io_>::io(const looper::handle handle, const loop_ptr& loop, io_type&& io_obj)
+io<t_wr_, t_rd_, t_io_>::io(
+    const looper::handle handle, const loop_ptr& loop, io_type&& io_obj) noexcept
     : m_base(handle, loop, std::move(io_obj))
 {}
 
@@ -358,13 +356,13 @@ const t_io_& io<t_wr_, t_rd_, t_io_>::io_obj() const {
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-std::pair<std::unique_lock<std::mutex>, io_control> io<t_wr_, t_rd_, t_io_>::use() {
+std::pair<std::unique_lock<std::mutex>, io_control> io<t_wr_, t_rd_, t_io_>::use() noexcept {
     auto [lock, res_control] = m_base.m_resource.lock_loop();
     return {std::move(lock), io_control(m_base.m_state, res_control)};
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-void io<t_wr_, t_rd_, t_io_>::register_to_loop() {
+void io<t_wr_, t_rd_, t_io_>::register_to_loop() noexcept {
     auto [lock, control] = m_base.m_resource.lock_loop();
     control.attach_to_loop(
         m_base.m_io.get_descriptor(),
@@ -373,7 +371,8 @@ void io<t_wr_, t_rd_, t_io_>::register_to_loop() {
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-looper::error io<t_wr_, t_rd_, t_io_>::mark_connected() requires connectable_io_type<t_io_, t_wr_, t_rd_> {
+looper::error io<t_wr_, t_rd_, t_io_>::mark_connected() noexcept
+    requires connectable_io_type<t_io_, t_wr_, t_rd_> {
     auto [lock, control] = m_base.m_resource.lock_loop();
     RETURN_IF_ERROR(m_base.m_state.verify_not_errored());
 
@@ -389,7 +388,10 @@ looper::error io<t_wr_, t_rd_, t_io_>::mark_connected() requires connectable_io_
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-looper::error io<t_wr_, t_rd_, t_io_>::connect(connector&& connector, connect_callback&& callback) requires connectable_io_type<t_io_, t_wr_, t_rd_> {
+looper::error io<t_wr_, t_rd_, t_io_>::connect(
+    connector&& connector,
+    connect_callback&& callback) noexcept
+    requires connectable_io_type<t_io_, t_wr_, t_rd_> {
     auto [lock, control] = m_base.m_resource.lock_loop();
     RETURN_IF_ERROR(m_base.m_state.verify_not_errored());
 
@@ -418,27 +420,30 @@ looper::error io<t_wr_, t_rd_, t_io_>::connect(connector&& connector, connect_ca
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-looper::error io<t_wr_, t_rd_, t_io_>::start_read(read_callback&& callback) {
+looper::error io<t_wr_, t_rd_, t_io_>::start_read(read_callback&& callback) noexcept {
     return m_base.start_read(std::move(callback));
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-looper::error io<t_wr_, t_rd_, t_io_>::stop_read() {
+looper::error io<t_wr_, t_rd_, t_io_>::stop_read() noexcept {
     return m_base.stop_read();
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-looper::error io<t_wr_, t_rd_, t_io_>::write(write_request&& request) {
+looper::error io<t_wr_, t_rd_, t_io_>::write(write_request&& request) noexcept {
     return m_base.write(std::move(request));
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-void io<t_wr_, t_rd_, t_io_>::close() {
+void io<t_wr_, t_rd_, t_io_>::close() noexcept {
     m_base.close();
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-void io<t_wr_, t_rd_, t_io_>::handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control& control, const event_type events) {
+void io<t_wr_, t_rd_, t_io_>::handle_events(
+    std::unique_lock<std::mutex>& lock,
+    loop_resource::control& control,
+    const event_type events) noexcept {
     if (m_base.m_state.is_errored() && (events & (event_type::error | event_type::hung)) != 0) {
         control.request_events(event_type::none, events_update_type::override);
         control.detach_from_loop();
