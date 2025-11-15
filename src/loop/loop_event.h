@@ -9,8 +9,8 @@ class event final {
 public:
     event(looper::event handle, const loop_ptr& loop, event_callback&& callback);
 
-    void set();
-    void clear();
+    looper::error set();
+    looper::error clear();
 
 private:
     void handle_events(std::unique_lock<std::mutex>& lock, const loop_resource::control& control, event_types events) const;

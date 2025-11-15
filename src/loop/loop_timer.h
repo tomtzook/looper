@@ -8,12 +8,12 @@ class timer final {
 public:
     timer(looper::timer handle, loop_ptr loop, timer_callback&& callback, std::chrono::milliseconds timeout);
 
-    void start();
+    looper::error start();
     void stop();
     void reset();
 
 private:
-    void handle_events();
+    void handle_events() const;
 
     looper::timer m_handle;
     loop_ptr m_loop;

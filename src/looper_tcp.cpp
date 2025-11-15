@@ -36,7 +36,7 @@ void bind_tcp(const tcp tcp, const uint16_t port) {
     looper_trace_info(log_module, "binding tcp: loop=%lu, handle=%lu, port=%d", data.handle, tcp, port);
 
     auto& tcp_impl = data.tcps[tcp];
-    tcp_impl.bind(port);
+    throw_if_error(tcp_impl.bind(port));
 }
 
 void bind_tcp(const tcp tcp, const std::string_view address, const uint16_t port) {
@@ -47,7 +47,7 @@ void bind_tcp(const tcp tcp, const std::string_view address, const uint16_t port
     looper_trace_info(log_module, "binding tcp: loop=%lu, handle=%lu, address=%s:%d", data.handle, tcp, address.data(), port);
 
     auto& tcp_impl = data.tcps[tcp];
-    tcp_impl.bind(address, port);
+    throw_if_error(tcp_impl.bind(address, port));
 }
 
 void connect_tcp(const tcp tcp, const std::string_view address, const uint16_t port, connect_callback&& callback) {
@@ -58,7 +58,7 @@ void connect_tcp(const tcp tcp, const std::string_view address, const uint16_t p
     looper_trace_info(log_module, "connecting tcp: loop=%lu, handle=%lu, address=%s, port=%d", data.handle, tcp, address.data(), port);
 
     auto& tcp_impl = data.tcps[tcp];
-    tcp_impl.connect(std::move(callback), address, port);
+    throw_if_error(tcp_impl.connect(std::move(callback), address, port));
 }
 
 void start_tcp_read(const tcp tcp, read_callback&& callback) {
@@ -69,7 +69,7 @@ void start_tcp_read(const tcp tcp, read_callback&& callback) {
     looper_trace_info(log_module, "starting tcp read: loop=%lu, handle=%lu", data.handle, tcp);
 
     auto& tcp_impl = data.tcps[tcp];
-    tcp_impl.start_read(std::move(callback));
+    throw_if_error(tcp_impl.start_read(std::move(callback)));
 }
 
 void stop_tcp_read(const tcp tcp) {
@@ -80,7 +80,7 @@ void stop_tcp_read(const tcp tcp) {
     looper_trace_info(log_module, "stopping tcp read: loop=%lu, handle=%lu", data.handle, tcp);
 
     auto& tcp_impl = data.tcps[tcp];
-    tcp_impl.stop_read();
+    throw_if_error(tcp_impl.stop_read());
 }
 
 void write_tcp(const tcp tcp, const std::span<const uint8_t> buffer, write_callback&& callback) {
@@ -101,7 +101,7 @@ void write_tcp(const tcp tcp, const std::span<const uint8_t> buffer, write_callb
 
     memcpy(request.buffer.get(), buffer.data(), buffer_size);
 
-    tcp_impl.write(std::move(request));
+    throw_if_error(tcp_impl.write(std::move(request)));
 }
 
 tcp_server create_tcp_server(const loop loop) {
@@ -135,7 +135,7 @@ void bind_tcp_server(const tcp_server tcp, const std::string_view address, const
     looper_trace_info(log_module, "binding tcp server: loop=%lu, handle=%lu, address=%s, port=%d", data.handle, tcp, address.data(), port);
 
     auto& tcp_impl = data.tcp_servers[tcp];
-    tcp_impl.bind(address, port);
+    throw_if_error(tcp_impl.bind(address, port));
 }
 
 void bind_tcp_server(const tcp_server tcp, const uint16_t port) {
@@ -146,7 +146,7 @@ void bind_tcp_server(const tcp_server tcp, const uint16_t port) {
     looper_trace_info(log_module, "binding tcp server: loop=%lu, handle=%lu, port=%d", data.handle, tcp, port);
 
     auto& tcp_impl = data.tcp_servers[tcp];
-    tcp_impl.bind(port);
+    throw_if_error(tcp_impl.bind(port));
 }
 
 void listen_tcp(const tcp_server tcp, const size_t backlog, listen_callback&& callback) {
@@ -157,7 +157,7 @@ void listen_tcp(const tcp_server tcp, const size_t backlog, listen_callback&& ca
     looper_trace_info(log_module, "start listen on tcp server: loop=%lu, handle=%lu, backlog=%lu", data.handle, tcp, backlog);
 
     auto& tcp_impl = data.tcp_servers[tcp];
-    tcp_impl.listen(backlog, std::move(callback));
+    throw_if_error(tcp_impl.listen(backlog, std::move(callback)));
 }
 
 tcp accept_tcp(const tcp_server tcp) {
@@ -169,7 +169,9 @@ tcp accept_tcp(const tcp_server tcp) {
 
     auto& server_impl = data.tcp_servers[tcp];
     const auto client_handle = data.tcps.reserve();
-    auto client = server_impl.accept(client_handle);
+    auto [error, client] = server_impl.accept(client_handle);
+    throw_if_error(error);
+
     data.tcps.assign(client_handle, std::move(client));
 
     looper_trace_info(log_module, "new tcp accepted: loop=%lu, server=%lu, client=%lu", data.handle, tcp, client_handle);

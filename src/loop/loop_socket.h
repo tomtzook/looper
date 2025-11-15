@@ -9,6 +9,22 @@ template<write_request_type t_wr_, typename t_io_>
 struct base_socket_client {
     using write_request = t_wr_;
     using io = t_io_;
+
+    enum class state {
+        open,
+        closed
+    };
+
+    base_socket_client(io&& io, state state);
+
+    state m_state;
+    io m_io;
+};
+
+template<write_request_type t_wr_, is_connectable_io t_io_>
+struct base_connectable_socket_client {
+    using write_request = t_wr_;
+    using io = t_io_;
     using connector = std::function<looper::error(const io&)>;
 
     enum class state {
@@ -18,9 +34,12 @@ struct base_socket_client {
         closed
     };
 
-    base_socket_client(io&& io, state state);
+    base_connectable_socket_client(io&& io, state state);
 
-    void connect(connector&& connector, connect_callback&& callback);
+    // todo: this throws while (possible) and is called directly from the user, while handle_events
+    //  is called only from loop, so this is a bit not clear
+    //  maybe everything must be done via the loop
+    looper::error connect(connector&& connector, connect_callback&& callback);
 
     bool handle_events(std::unique_lock<std::mutex>& lock, const io_control& control, event_types events);
     void handle_connect(std::unique_lock<std::mutex>& lock, const io_control& control);
@@ -34,19 +53,19 @@ struct base_socket_client {
 template<os::os_stream_type t_, typename bind_func_, typename connect_func_>
 class stream_socket_client final {
 public:
-    using base_type = base_socket_client<stream_write_request, stream<t_>>;
+    using base_type = base_connectable_socket_client<stream_write_request, stream<t_>>;
 
     stream_socket_client(looper::handle handle, const loop_ptr& loop, t_&& skt_obj, base_type::state state);
     stream_socket_client(looper::handle handle, const loop_ptr& loop);
 
     template<typename... args_>
-    void bind(args_... args);
+    looper::error bind(args_... args);
     template<typename... args_>
-    void connect(connect_callback&& callback, args_... args);
+    looper::error connect(connect_callback&& callback, args_... args);
 
-    void start_read(looper::read_callback&& callback);
-    void stop_read();
-    void write(stream_write_request&& request);
+    looper::error start_read(looper::read_callback&& callback);
+    looper::error stop_read();
+    looper::error write(stream_write_request&& request);
 
     void close();
 
@@ -61,10 +80,10 @@ public:
     socket_server(looper::handle handle, const loop_ptr& loop);
 
     template<typename... args_>
-    void bind(args_... args);
+    looper::error bind(args_... args);
 
-    void listen(size_t backlog, listen_callback&& callback);
-    std::unique_ptr<t_client_> accept(looper::handle new_handle);
+    looper::error listen(size_t backlog, listen_callback&& callback);
+    std::pair<looper::error, std::unique_ptr<t_client_>> accept(looper::handle new_handle);
 
     void close();
 
@@ -115,15 +134,77 @@ using unix_socket_server = socket_server<os::unix_socket, unix_socket_client, un
 
 #endif
 
+struct udp_write_request {
+    size_t pos;
+    size_t size;
+    looper::error error;
+    looper::write_callback write_callback;
+
+    std::unique_ptr<uint8_t[]> buffer;
+    inet_address destination;
+};
+
+struct udp_read_data {
+    std::span<uint8_t> buffer;
+    size_t read_count;
+    inet_address sender;
+    looper::error error;
+};
+
+struct udp_io {
+    using underlying_type = os::udp;
+
+    udp_io();
+
+    [[nodiscard]] os::descriptor get_descriptor() const;
+    looper::error read(udp_read_data& data) const;
+    looper::error write(const udp_write_request& request, size_t& written) const;
+
+    void close();
+
+    os::udp m_obj;
+};
+
+class udp_socket final {
+public:
+    using io_type = io<udp_write_request, udp_read_data, udp_io>;
+    using base_type = base_socket_client<udp_write_request, io_type>;
+
+    udp_socket(looper::handle handle, const loop_ptr& loop);
+
+    looper::error bind(uint16_t port);
+    looper::error bind(std::string_view address, uint16_t port);
+
+    looper::error start_read(udp_read_callback&& callback);
+    looper::error stop_read();
+    looper::error write(udp_write_request&& request);
+
+    void close();
+
+private:
+    base_type m_base;
+};
+
 template<write_request_type t_wr_, typename t_io_>
 base_socket_client<t_wr_, t_io_>::base_socket_client(io&& io, const state state)
+    : m_state(state)
+    , m_io(std::move(io)) {
+    m_io.register_to_loop();
+
+    auto [lock, control] = m_io.use();
+    control.state.set_read_enabled(true);
+    control.state.set_write_enabled(true);
+}
+
+template<write_request_type t_wr_, is_connectable_io t_io_>
+base_connectable_socket_client<t_wr_, t_io_>::base_connectable_socket_client(io&& io, const state state)
     : m_state(state)
     , m_io(std::move(io))
     , m_connect_callback() {
     m_io.register_to_loop();
 
     auto [lock, control] = m_io.use();
-    m_io.set_custom_event_handler(std::bind_front(&base_socket_client::handle_events, this));
+    m_io.set_custom_event_handler(std::bind_front(&base_connectable_socket_client::handle_events, this));
 
     if (m_state == state::connected) {
         control.state.set_read_enabled(true);
@@ -131,13 +212,13 @@ base_socket_client<t_wr_, t_io_>::base_socket_client(io&& io, const state state)
     }
 }
 
-template<write_request_type t_wr_, typename t_io_>
-void base_socket_client<t_wr_, t_io_>::connect(connector&& connector, connect_callback&& callback) {
+template<write_request_type t_wr_, is_connectable_io t_io_>
+looper::error base_connectable_socket_client<t_wr_, t_io_>::connect(connector&& connector, connect_callback&& callback) {
     auto [lock, control] = m_io.use();
     control.state.verify_not_errored();
 
     if (m_state != state::open) {
-        throw std::runtime_error("socket state invalid for connect");
+        return error_invalid_state;
     }
 
     looper_trace_info(loop_io_log_module, "connecting socket: handle=%lu", m_io.handle());
@@ -155,10 +236,12 @@ void base_socket_client<t_wr_, t_io_>::connect(connector&& connector, connect_ca
     } else {
         on_connect_done(lock, control, error);
     }
+
+    return error_success;
 }
 
-template<write_request_type t_wr_, typename t_io_>
-bool base_socket_client<t_wr_, t_io_>::handle_events(std::unique_lock<std::mutex>& lock, const io_control& control, const event_types events) {
+template<write_request_type t_wr_, is_connectable_io t_io_>
+bool base_connectable_socket_client<t_wr_, t_io_>::handle_events(std::unique_lock<std::mutex>& lock, const io_control& control, const event_types events) {
     switch (m_state) {
         case state::connecting: {
             if ((events & event_out) != 0) {
@@ -175,16 +258,16 @@ bool base_socket_client<t_wr_, t_io_>::handle_events(std::unique_lock<std::mutex
     }
 }
 
-template<write_request_type t_wr_, typename t_io_>
-void base_socket_client<t_wr_, t_io_>::handle_connect(std::unique_lock<std::mutex>& lock, const io_control& control) {
+template<write_request_type t_wr_, is_connectable_io t_io_>
+void base_connectable_socket_client<t_wr_, t_io_>::handle_connect(std::unique_lock<std::mutex>& lock, const io_control& control) {
     // finish connect
     const auto error = os::finalize_connect(m_io.io_obj().m_obj);
     control.request_events(event_out, events_update_type::remove);
     on_connect_done(lock, control, error);
 }
 
-template<write_request_type t_wr_, typename t_io_>
-void base_socket_client<t_wr_, t_io_>::on_connect_done(std::unique_lock<std::mutex>& lock, const io_control& control, const error error) {
+template<write_request_type t_wr_, is_connectable_io t_io_>
+void base_connectable_socket_client<t_wr_, t_io_>::on_connect_done(std::unique_lock<std::mutex>& lock, const io_control& control, const error error) {
     if (error == error_success) {
         // connection finished
         m_state = state::connected;
@@ -213,34 +296,34 @@ stream_socket_client<t_, bind_func_, connect_func_>::stream_socket_client(looper
 
 template<os::os_stream_type t_, typename bind_func_, typename connect_func_>
 template<typename... args_>
-void stream_socket_client<t_, bind_func_, connect_func_>::bind(args_... args) {
+looper::error stream_socket_client<t_, bind_func_, connect_func_>::bind(args_... args) {
     auto [lock, control] = m_base.m_io.use();
     control.state.verify_not_errored();
 
-    OS_CHECK_THROW(bind_func_()(m_base.m_io.io_obj().m_obj, args...));
+    return bind_func_()(m_base.m_io.io_obj().m_obj, args...);
 }
 
 template<os::os_stream_type t_, typename bind_func_, typename connect_func_>
 template<typename... args_>
-void stream_socket_client<t_, bind_func_, connect_func_>::connect(connect_callback&& callback, args_... args) {
-    m_base.connect([args...](const stream<t_>& stream)->looper::error {
+looper::error stream_socket_client<t_, bind_func_, connect_func_>::connect(connect_callback&& callback, args_... args) {
+    return m_base.connect([args...](const stream<t_>& stream)->looper::error {
         return connect_func_()(stream.io_obj().m_obj, args...);
     }, std::move(callback));
 }
 
 template<os::os_stream_type t_, typename bind_func_, typename connect_func_>
-void stream_socket_client<t_, bind_func_, connect_func_>::start_read(looper::read_callback&& callback) {
-    m_base.m_io.start_read_stream(std::move(callback));
+looper::error stream_socket_client<t_, bind_func_, connect_func_>::start_read(looper::read_callback&& callback) {
+    return m_base.m_io.start_read_stream(std::move(callback));
 }
 
 template<os::os_stream_type t_, typename bind_func_, typename connect_func_>
-void stream_socket_client<t_, bind_func_, connect_func_>::stop_read() {
-    m_base.m_io.stop_read();
+looper::error stream_socket_client<t_, bind_func_, connect_func_>::stop_read() {
+    return m_base.m_io.stop_read();
 }
 
 template<os::os_stream_type t_, typename bind_func_, typename connect_func_>
-void stream_socket_client<t_, bind_func_, connect_func_>::write(stream_write_request&& request) {
-    m_base.m_io.write(std::move(request));
+looper::error stream_socket_client<t_, bind_func_, connect_func_>::write(stream_write_request&& request) {
+    return m_base.m_io.write(std::move(request));
 }
 
 template<os::os_stream_type t_, typename bind_func_, typename connect_func_>
@@ -269,30 +352,37 @@ socket_server<t_, t_client_, bind_func_>::socket_server(looper::handle handle, c
 
 template<os::os_stream_type t_, typename t_client_, typename bind_func_>
 template<typename... args_>
-void socket_server<t_, t_client_, bind_func_>::bind(args_... args) {
+looper::error socket_server<t_, t_client_, bind_func_>::bind(args_... args) {
     auto [lock, control] = m_resource.lock_loop();
-    OS_CHECK_THROW(bind_func_()(m_socket_obj, args...));
+    return bind_func_()(m_socket_obj, args...);
 }
 
 template<os::os_stream_type t_, typename t_client_, typename bind_func_>
-void socket_server<t_, t_client_, bind_func_>::listen(size_t backlog, listen_callback&& callback) {
+looper::error socket_server<t_, t_client_, bind_func_>::listen(size_t backlog, listen_callback&& callback) {
     auto [lock, control] = m_resource.lock_loop();
 
-    OS_CHECK_THROW(os::socket_listen(m_socket_obj, backlog));
+    const auto status = os::socket_listen(m_socket_obj, backlog);
+    if (status != error_success) {
+        return status;
+    }
+
     m_callback = callback;
-
     control.request_events(event_in, events_update_type::append);
+
+    return error_success;
 }
 
 template<os::os_stream_type t_, typename t_client_, typename bind_func_>
-std::unique_ptr<t_client_> socket_server<t_, t_client_, bind_func_>::accept(looper::handle new_handle) {
+std::pair<looper::error, std::unique_ptr<t_client_>> socket_server<t_, t_client_, bind_func_>::accept(looper::handle new_handle) {
     auto [lock, control] = m_resource.lock_loop();
 
     auto [error, new_obj] = os::socket_accept(m_socket_obj);
-    OS_CHECK_THROW(error);
+    if (error != error_success) {
+        return {error, std::unique_ptr<t_client_>()};
+    }
 
     lock.unlock();
-    return std::make_unique<t_client_>(new_handle, m_loop, std::move(new_obj), t_client_::base_type::state::connected);
+    return {error_success, std::make_unique<t_client_>(new_handle, m_loop, std::move(new_obj), t_client_::base_type::state::connected)};
 }
 
 template<os::os_stream_type t_, typename t_client_, typename bind_func_>

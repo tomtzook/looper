@@ -36,7 +36,7 @@ void bind_udp(const udp udp, const uint16_t port) {
     looper_trace_info(log_module, "binding udp: loop=%lu, handle=%lu, port=%d", data.handle, udp, port);
 
     auto& udp_impl = data.udps[udp];
-    udp_impl.bind(port);
+    throw_if_error(udp_impl.bind(port));
 }
 
 void start_udp_read(const udp udp, udp_read_callback&& callback) {
@@ -47,7 +47,7 @@ void start_udp_read(const udp udp, udp_read_callback&& callback) {
     looper_trace_info(log_module, "starting udp read: loop=%lu, handle=%lu", data.handle, udp);
 
     auto& udp_impl = data.udps[udp];
-    udp_impl.start_read(std::move(callback));
+    throw_if_error(udp_impl.start_read(std::move(callback)));
 }
 
 void stop_udp_read(const udp udp) {
@@ -58,7 +58,7 @@ void stop_udp_read(const udp udp) {
     looper_trace_info(log_module, "stopping udp read: loop=%lu, handle=%lu", data.handle, udp);
 
     auto& udp_impl = data.udps[udp];
-    udp_impl.stop_read();
+    throw_if_error(udp_impl.stop_read());
 }
 
 void write_udp(const udp udp, inet_address_view destination, const std::span<const uint8_t> buffer, udp_callback&& callback) {
@@ -79,7 +79,7 @@ void write_udp(const udp udp, inet_address_view destination, const std::span<con
 
     memcpy(request.buffer.get(), buffer.data(), buffer_size);
 
-    udp_impl.write(std::move(request));
+    throw_if_error(udp_impl.write(std::move(request)));
 }
 
 }

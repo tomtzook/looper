@@ -36,7 +36,7 @@ void bind_unix_socket(const unix_socket unix_socket, const std::string_view path
     looper_trace_info(log_module, "binding unix_socket: loop=%lu, handle=%lu, path=%s", data.handle, unix_socket, path.data());
 
     auto& unix_socket_impl = data.unix_sockets[unix_socket];
-    unix_socket_impl.bind(path);
+    throw_if_error(unix_socket_impl.bind(path));
 }
 
 void connect_unix_socket(const unix_socket unix_socket, const std::string_view path, connect_callback&& callback) {
@@ -47,7 +47,7 @@ void connect_unix_socket(const unix_socket unix_socket, const std::string_view p
     looper_trace_info(log_module, "connecting unix_socket: loop=%lu, handle=%lu, path=%s", data.handle, unix_socket, path.data());
 
     auto& unix_socket_impl = data.unix_sockets[unix_socket];
-    unix_socket_impl.connect(std::move(callback), path);
+    throw_if_error(unix_socket_impl.connect(std::move(callback), path));
 }
 
 void start_unix_socket_read(const unix_socket unix_socket, read_callback&& callback) {
@@ -58,7 +58,7 @@ void start_unix_socket_read(const unix_socket unix_socket, read_callback&& callb
     looper_trace_info(log_module, "starting unix_socket read: loop=%lu, handle=%lu", data.handle, unix_socket);
 
     auto& unix_socket_impl = data.unix_sockets[unix_socket];
-    unix_socket_impl.start_read(std::move(callback));
+    throw_if_error(unix_socket_impl.start_read(std::move(callback)));
 }
 
 void stop_unix_socket_read(const unix_socket unix_socket) {
@@ -69,7 +69,7 @@ void stop_unix_socket_read(const unix_socket unix_socket) {
     looper_trace_info(log_module, "stopping unix_socket read: loop=%lu, handle=%lu", data.handle, unix_socket);
 
     auto& unix_socket_impl = data.unix_sockets[unix_socket];
-    unix_socket_impl.stop_read();
+    throw_if_error(unix_socket_impl.stop_read());
 }
 
 void write_unix_socket(const unix_socket unix_socket, const std::span<const uint8_t> buffer, unix_socket_callback&& callback) {
@@ -90,7 +90,7 @@ void write_unix_socket(const unix_socket unix_socket, const std::span<const uint
 
     memcpy(request.buffer.get(), buffer.data(), buffer_size);
 
-    unix_socket_impl.write(std::move(request));
+    throw_if_error(unix_socket_impl.write(std::move(request)));
 }
 
 unix_socket_server create_unix_socket_server(const loop loop) {
@@ -124,7 +124,7 @@ void bind_unix_socket_server(const unix_socket_server unix_socket, const std::st
     looper_trace_info(log_module, "binding unix_socket server: loop=%lu, handle=%lu, path=%s", data.handle, unix_socket, path.data());
 
     auto& unix_socket_impl = data.unix_socket_servers[unix_socket];
-    unix_socket_impl.bind(path);
+    throw_if_error(unix_socket_impl.bind(path));
 }
 
 void listen_unix_socket(const unix_socket_server unix_socket, const size_t backlog, listen_callback&& callback) {
@@ -135,7 +135,7 @@ void listen_unix_socket(const unix_socket_server unix_socket, const size_t backl
     looper_trace_info(log_module, "start listen on unix_socket server: loop=%lu, handle=%lu, backlog=%lu", data.handle, unix_socket, backlog);
 
     auto& unix_socket_impl = data.unix_socket_servers[unix_socket];
-    unix_socket_impl.listen(backlog, std::move(callback));
+    throw_if_error(unix_socket_impl.listen(backlog, std::move(callback)));
 }
 
 unix_socket accept_unix_socket(const unix_socket_server unix_socket) {
@@ -147,7 +147,9 @@ unix_socket accept_unix_socket(const unix_socket_server unix_socket) {
 
     auto& server_impl = data.unix_socket_servers[unix_socket];
     const auto client_handle = data.unix_sockets.reserve();
-    auto client = server_impl.accept(client_handle);
+    auto [error, client] = server_impl.accept(client_handle);
+    throw_if_error(error);
+
     data.unix_sockets.assign(client_handle, std::move(client));
 
     looper_trace_info(log_module, "new unix_socket accepted: loop=%lu, server=%lu, client=%lu", data.handle, unix_socket, client_handle);

@@ -14,15 +14,15 @@ timer::timer(const looper::timer handle, loop_ptr loop, timer_callback&& callbac
     , m_loop_data()
 {}
 
-void timer::start() {
+looper::error timer::start() {
     auto lock = m_loop->lock_loop();
 
     if (m_timeout < min_poll_timeout) {
-        throw std::runtime_error("timer timeout too small");
+        return error_timeout_too_small;
     }
 
     if (m_running) {
-        return;
+        return error_already_running;
     }
 
     m_loop_data.timeout = m_timeout;
@@ -39,6 +39,8 @@ void timer::start() {
 
     m_loop->set_timeout_if_smaller(m_timeout);
     m_loop->signal_run();
+
+    return error_success;
 }
 
 void timer::stop() {
@@ -68,7 +70,7 @@ void timer::reset() {
     looper_trace_info(log_module, "resetting timer: handle=%lu, next_time=%lu", m_handle, m_loop_data.next_timestamp.count());
 }
 
-void timer::handle_events() {
+void timer::handle_events() const {
     auto lock = m_loop->lock_loop();
     invoke_func(lock, "timer_callback", m_callback, m_handle);
 }

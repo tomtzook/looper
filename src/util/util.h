@@ -4,6 +4,7 @@
 #include <functional>
 
 #include "looper_trace.h"
+#include "looper_types.h"
 
 namespace looper {
 
@@ -54,6 +55,19 @@ static void invoke_func_nolock(const char* name, const std::function<void(args_.
         } catch (...) {
             looper_trace_error(cbinvoke_log_module, "Error while invoking func %s: unknown", name);
         }
+    }
+}
+
+inline void throw_if_error(const looper::error code) {
+    switch (code) {
+        case error_success:
+            return;
+        case error_bad_handle:
+            throw bad_handle_exception(empty_handle);
+        case error_no_such_handle:
+            throw no_such_handle_exception(empty_handle);
+        default:
+            throw os_exception(code);
     }
 }
 

@@ -10,7 +10,6 @@
 #include "loop/loop_timer.h"
 #include "loop/loop_future.h"
 #include "loop/loop_event.h"
-#include "loop/loop_udp.h"
 #include "loop/loop_socket.h"
 
 namespace looper {
@@ -41,7 +40,7 @@ struct loop_data {
     handles::handle_table<impl::future, handle_counts_per_type> futures;
     handles::handle_table<impl::tcp_client, handle_counts_per_type> tcps;
     handles::handle_table<impl::tcp_server, handle_counts_per_type> tcp_servers;
-    handles::handle_table<impl::udp, handle_counts_per_type> udps;
+    handles::handle_table<impl::udp_socket, handle_counts_per_type> udps;
 
 #ifdef LOOPER_UNIX_SOCKETS
     handles::handle_table<impl::unix_socket_client, handle_counts_per_type> unix_sockets;

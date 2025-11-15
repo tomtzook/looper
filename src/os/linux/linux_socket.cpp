@@ -369,7 +369,7 @@ struct tcp : public detail::base_socket {
     bool disabled;
 };
 
-looper::error create(tcp** tcp_out) {
+looper::error create(tcp** tcp_out) noexcept {
     tcp* _tcp;
     const auto status = detail::create_new_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, true, &_tcp);
     if (status != error_success) {
@@ -382,19 +382,19 @@ looper::error create(tcp** tcp_out) {
     return error_success;
 }
 
-void close(tcp* tcp) {
+void close(tcp* tcp) noexcept {
     detail::close_socket(tcp);
 }
 
-descriptor get_descriptor(const tcp* tcp) {
+descriptor get_descriptor(const tcp* tcp) noexcept {
     return tcp->fd;
 }
 
-looper::error get_internal_error(const tcp* tcp, looper::error& error_out) {
+looper::error get_internal_error(const tcp* tcp, looper::error& error_out) noexcept {
     return detail::get_socket_error(tcp->fd, error_out);
 }
 
-looper::error bind(const tcp* tcp, const uint16_t port) {
+looper::error bind(const tcp* tcp, const uint16_t port) noexcept {
     if (tcp->closed) {
         return error_fd_closed;
     }
@@ -405,7 +405,7 @@ looper::error bind(const tcp* tcp, const uint16_t port) {
     return detail::bind_socket_ipv4(tcp->fd, port);
 }
 
-looper::error bind(const tcp* tcp, const std::string_view ip, const uint16_t port) {
+looper::error bind(const tcp* tcp, const std::string_view ip, const uint16_t port) noexcept {
     if (tcp->closed) {
         return error_fd_closed;
     }
@@ -416,7 +416,7 @@ looper::error bind(const tcp* tcp, const std::string_view ip, const uint16_t por
     return detail::bind_socket_ipv4(tcp->fd, ip, port);
 }
 
-looper::error connect(tcp* tcp, const std::string_view ip, const uint16_t port) {
+looper::error connect(tcp* tcp, const std::string_view ip, const uint16_t port) noexcept {
     if (tcp->closed) {
         return error_fd_closed;
     }
@@ -434,7 +434,7 @@ looper::error connect(tcp* tcp, const std::string_view ip, const uint16_t port) 
     return status;
 }
 
-looper::error finalize_connect(tcp* tcp) {
+looper::error finalize_connect(tcp* tcp) noexcept {
     if (tcp->closed) {
         return error_fd_closed;
     }
@@ -443,7 +443,7 @@ looper::error finalize_connect(tcp* tcp) {
     return detail::finalize_connect_socket(tcp->fd);
 }
 
-looper::error read(const tcp* tcp, uint8_t* buffer, const size_t buffer_size, size_t& read_out) {
+looper::error read(const tcp* tcp, uint8_t* buffer, const size_t buffer_size, size_t& read_out) noexcept {
     if (tcp->closed) {
         return error_fd_closed;
     }
@@ -454,7 +454,7 @@ looper::error read(const tcp* tcp, uint8_t* buffer, const size_t buffer_size, si
     return detail::read_socket_stream(tcp->fd, buffer, buffer_size, read_out);
 }
 
-looper::error write(const tcp* tcp, const uint8_t* buffer, const size_t size, size_t& written_out) {
+looper::error write(const tcp* tcp, const uint8_t* buffer, const size_t size, size_t& written_out) noexcept {
     if (tcp->closed) {
         return error_fd_closed;
     }
@@ -465,7 +465,7 @@ looper::error write(const tcp* tcp, const uint8_t* buffer, const size_t size, si
     return detail::write_socket_stream(tcp->fd, buffer, size, written_out);
 }
 
-looper::error listen(const tcp* tcp, const size_t backlog_size) {
+looper::error listen(const tcp* tcp, const size_t backlog_size) noexcept {
     if (tcp->closed) {
         return error_fd_closed;
     }
@@ -476,7 +476,7 @@ looper::error listen(const tcp* tcp, const size_t backlog_size) {
     return detail::listen_socket(tcp->fd, backlog_size);
 }
 
-looper::error accept(const tcp* this_tcp, tcp** tcp_out) {
+looper::error accept(const tcp* this_tcp, tcp** tcp_out) noexcept {
     if (this_tcp->closed) {
         return error_fd_closed;
     }
@@ -503,7 +503,7 @@ namespace udp {
 struct udp : public detail::base_socket {
 };
 
-looper::error create(udp** udp_out) {
+looper::error create(udp** udp_out) noexcept {
     udp* _udp;
     const auto status = detail::create_new_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP, true, &_udp);
     if (status != error_success) {
@@ -514,19 +514,19 @@ looper::error create(udp** udp_out) {
     return error_success;
 }
 
-void close(udp* udp) {
+void close(udp* udp) noexcept {
     detail::close_socket(udp);
 }
 
-descriptor get_descriptor(const udp* udp) {
+descriptor get_descriptor(const udp* udp) noexcept {
     return udp->fd;
 }
 
-looper::error get_internal_error(const udp* udp, looper::error& error_out) {
+looper::error get_internal_error(const udp* udp, looper::error& error_out) noexcept {
     return detail::get_socket_error(udp->fd, error_out);
 }
 
-looper::error bind(const udp* udp, const uint16_t port) {
+looper::error bind(const udp* udp, const uint16_t port) noexcept {
     if (udp->closed) {
         return error_fd_closed;
     }
@@ -534,7 +534,7 @@ looper::error bind(const udp* udp, const uint16_t port) {
     return detail::bind_socket_ipv4(udp->fd, port);
 }
 
-looper::error bind(const udp* udp, const std::string_view ip, const uint16_t port) {
+looper::error bind(const udp* udp, const std::string_view ip, const uint16_t port) noexcept {
     if (udp->closed) {
         return error_fd_closed;
     }
@@ -549,7 +549,7 @@ looper::error read(
     size_t& read_out,
     char* sender_ip_buff,
     const size_t sender_ip_buff_size,
-    uint16_t& sender_port_out) {
+    uint16_t& sender_port_out) noexcept {
     if (udp->closed) {
         return error_fd_closed;
     }
@@ -563,7 +563,7 @@ looper::error write(
     const uint16_t dest_port,
     const uint8_t* buffer,
     const size_t size,
-    size_t& written_out) {
+    size_t& written_out) noexcept {
     if (udp->closed) {
         return error_fd_closed;
     }
@@ -581,7 +581,7 @@ struct unix_socket : public detail::base_socket {
     bool disabled;
 };
 
-looper::error create(unix_socket** skt_out) {
+looper::error create(unix_socket** skt_out) noexcept {
     unix_socket* _skt;
     const auto status = detail::create_new_socket(AF_UNIX, SOCK_STREAM, 0, false, &_skt);
     if (status != error_success) {
@@ -594,15 +594,15 @@ looper::error create(unix_socket** skt_out) {
     return error_success;
 }
 
-void close(unix_socket* skt) {
+void close(unix_socket* skt) noexcept {
     detail::close_socket(skt);
 }
 
-descriptor get_descriptor(const unix_socket* skt) {
+descriptor get_descriptor(const unix_socket* skt) noexcept {
     return skt->fd;
 }
 
-looper::error bind(const unix_socket* skt, const std::string_view path) {
+looper::error bind(const unix_socket* skt, const std::string_view path) noexcept {
     if (skt->closed) {
         return error_fd_closed;
     }
@@ -613,7 +613,7 @@ looper::error bind(const unix_socket* skt, const std::string_view path) {
     return detail::bind_socket_unix(skt->fd, path);
 }
 
-looper::error connect(unix_socket* skt, const std::string_view path) {
+looper::error connect(unix_socket* skt, const std::string_view path) noexcept {
     if (skt->closed) {
         return error_fd_closed;
     }
@@ -631,7 +631,7 @@ looper::error connect(unix_socket* skt, const std::string_view path) {
     return status;
 }
 
-looper::error finalize_connect(unix_socket* skt) {
+looper::error finalize_connect(unix_socket* skt) noexcept {
     if (skt->closed) {
         return error_fd_closed;
     }
@@ -640,7 +640,7 @@ looper::error finalize_connect(unix_socket* skt) {
     return detail::finalize_connect_socket(skt->fd);
 }
 
-looper::error read(const unix_socket* skt, uint8_t* buffer, const size_t buffer_size, size_t& read_out) {
+looper::error read(const unix_socket* skt, uint8_t* buffer, const size_t buffer_size, size_t& read_out) noexcept {
     if (skt->closed) {
         return error_fd_closed;
     }
@@ -651,7 +651,7 @@ looper::error read(const unix_socket* skt, uint8_t* buffer, const size_t buffer_
     return detail::read_socket_stream(skt->fd, buffer, buffer_size, read_out);
 }
 
-looper::error write(const unix_socket* skt, const uint8_t* buffer, const size_t size, size_t& written_out) {
+looper::error write(const unix_socket* skt, const uint8_t* buffer, const size_t size, size_t& written_out) noexcept {
     if (skt->closed) {
         return error_fd_closed;
     }
@@ -662,7 +662,7 @@ looper::error write(const unix_socket* skt, const uint8_t* buffer, const size_t 
     return detail::write_socket_stream(skt->fd, buffer, size, written_out);
 }
 
-looper::error listen(const unix_socket* skt, const size_t backlog_size) {
+looper::error listen(const unix_socket* skt, const size_t backlog_size) noexcept {
     if (skt->closed) {
         return error_fd_closed;
     }
@@ -673,7 +673,7 @@ looper::error listen(const unix_socket* skt, const size_t backlog_size) {
     return detail::listen_socket(skt->fd, backlog_size);
 }
 
-looper::error accept(const unix_socket* this_skt, unix_socket** skt_out) {
+looper::error accept(const unix_socket* this_skt, unix_socket** skt_out) noexcept {
     if (this_skt->closed) {
         return error_fd_closed;
     }

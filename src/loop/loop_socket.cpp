@@ -1,10 +1,10 @@
 
-#include "loop.h"
-#include "loop_udp.h"
+#include "loop_socket.h"
+
 
 namespace looper::impl {
 
-#define log_module loop_log_module "_udp"
+#define log_module loop_io_log_module
 
 udp_io::udp_io()
     : m_obj(os::udp::create())
@@ -47,40 +47,40 @@ void udp_io::close() {
     m_obj.close();
 }
 
-udp::udp(const looper::udp handle, const loop_ptr& loop)
-    : m_io(handle, loop, udp_io())
+udp_socket::udp_socket(const looper::handle handle, const loop_ptr& loop)
+    : m_base(io_type(handle, loop, udp_io()), base_type::state::open)
 {}
 
-void udp::bind(const uint16_t port) {
-    auto [lock, control] = m_io.use();
+looper::error udp_socket::bind(const uint16_t port) {
+    auto [lock, control] = m_base.m_io.use();
     control.state.verify_not_errored();
 
-    OS_CHECK_THROW(os::ipv4_bind(m_io.io_obj().m_obj, port));
+    return os::ipv4_bind(m_base.m_io.io_obj().m_obj, port);
 }
 
-void udp::bind(const std::string_view address, const uint16_t port) {
-    auto [lock, control] = m_io.use();
+looper::error udp_socket::bind(const std::string_view address, const uint16_t port) {
+    auto [lock, control] = m_base.m_io.use();
     control.state.verify_not_errored();
 
-    OS_CHECK_THROW(os::ipv4_bind(m_io.io_obj().m_obj, address, port));
+    return os::ipv4_bind(m_base.m_io.io_obj().m_obj, address, port);
 }
 
-void udp::start_read(udp_read_callback&& callback) {
-    m_io.start_read([callback](const looper::handle handle, const udp_read_data& data)->void {
+looper::error udp_socket::start_read(udp_read_callback&& callback) {
+    return m_base.m_io.start_read([callback](const looper::handle handle, const udp_read_data& data)->void {
         callback(handle, data.sender, data.buffer, data.error);
     });
 }
 
-void udp::stop_read() {
-    m_io.stop_read();
+looper::error udp_socket::stop_read() {
+    return m_base.m_io.stop_read();
 }
 
-void udp::write(udp_write_request&& request) {
-    m_io.write(std::move(request));
+looper::error udp_socket::write(udp_write_request&& request) {
+    return m_base.m_io.write(std::move(request));
 }
 
-void udp::close() {
-    m_io.close();
+void udp_socket::close() {
+    m_base.m_io.close();
 }
 
 }

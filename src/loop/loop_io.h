@@ -63,6 +63,7 @@ public:
     using io_type = t_io_;
     using read_callback = std::function<void(looper::handle, const t_rd_&)>;
     using custom_handle_events = std::function<bool(std::unique_lock<std::mutex>&, const io_control&, event_types)>;
+    static constexpr auto is_connectable = os::detail::connectable_socket_type<typename io_type::underlying_type>;
 
     io(looper::handle handle, const loop_ptr& loop, io_type&& io_obj);
 
@@ -79,9 +80,9 @@ public:
     std::pair<std::unique_lock<std::mutex>, io_control> use();
     void set_custom_event_handler(custom_handle_events&& func);
 
-    void start_read(read_callback&& callback);
-    void stop_read();
-    void write(write_request&& request);
+    looper::error start_read(read_callback&& callback);
+    looper::error stop_read();
+    looper::error write(write_request&& request);
 
     void close();
 
@@ -107,6 +108,9 @@ private:
     bool m_write_pending;
 };
 
+template<typename t_>
+concept is_connectable_io = t_::is_connectable;
+
 struct stream_write_request {
     std::unique_ptr<uint8_t[]> buffer;
     size_t pos;
@@ -124,6 +128,8 @@ struct stream_read_data {
 
 template<os::os_stream_type t_>
 struct stream_io {
+    using underlying_type = t_;
+
     explicit stream_io(t_&& obj);
 
     [[nodiscard]] os::descriptor get_descriptor() const;
@@ -141,7 +147,7 @@ public:
     // using handle_events_ext_func = std::function<bool(std::unique_lock<std::mutex>&, control&, event_types)>;
     stream(looper::handle handle, const loop_ptr& loop, t_&& obj);
 
-    void start_read_stream(looper::read_callback&& callback);
+    looper::error start_read_stream(looper::read_callback&& callback);
 };
 
 #define loop_io_log_module loop_log_module "_io"
@@ -190,7 +196,7 @@ void io<t_wr_, t_rd_, t_io_>::set_custom_event_handler(custom_handle_events&& fu
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-void io<t_wr_, t_rd_, t_io_>::start_read(read_callback&& callback) {
+looper::error io<t_wr_, t_rd_, t_io_>::start_read(read_callback&& callback) {
     auto [lock, control] = m_resource.lock_loop();
     m_state.verify_not_errored();
     m_state.verify_not_reading();
@@ -200,24 +206,28 @@ void io<t_wr_, t_rd_, t_io_>::start_read(read_callback&& callback) {
     m_read_callback = callback;
     control.request_events(event_in, events_update_type::append);
     m_state.set_reading(true);
+
+    return error_success;
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-void io<t_wr_, t_rd_, t_io_>::stop_read() {
+looper::error io<t_wr_, t_rd_, t_io_>::stop_read() {
     auto [lock, control] = m_resource.lock_loop();
 
     if (!m_state.is_reading()) {
-        return;
+        return error_success;
     }
 
     looper_trace_info(loop_io_log_module, "io stopping read: handle=%lu", m_handle);
 
     m_state.set_reading(false);
     control.request_events(event_in, events_update_type::remove);
+
+    return error_success;
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-void io<t_wr_, t_rd_, t_io_>::write(write_request&& request) {
+looper::error io<t_wr_, t_rd_, t_io_>::write(write_request&& request) {
     auto [lock, control] = m_resource.lock_loop();
     m_state.verify_not_errored();
 
@@ -229,6 +239,8 @@ void io<t_wr_, t_rd_, t_io_>::write(write_request&& request) {
         control.request_events(event_out, events_update_type::append);
         m_write_pending = true;
     }
+
+    return error_success;
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
@@ -395,8 +407,8 @@ stream<t_>::stream(looper::handle handle, const loop_ptr& loop, t_&& obj)
 {}
 
 template<os::os_stream_type t_>
-void stream<t_>::start_read_stream(looper::read_callback&& callback) {
-    this->start_read([callback](const looper::handle handle, const stream_read_data& data)->void {
+looper::error stream<t_>::start_read_stream(looper::read_callback&& callback) {
+    return this->start_read([callback](const looper::handle handle, const stream_read_data& data)->void {
         callback(handle, data.buffer, data.error);
     });
 }

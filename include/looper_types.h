@@ -84,7 +84,13 @@ enum : error {
     error_interrupted,
     error_operation_not_supported,
     error_allocation,
-    error_invalid_filemode
+    error_invalid_filemode,
+    error_already_queued,
+    error_timeout_too_small,
+    error_already_running,
+    error_bad_handle,
+    error_no_such_handle,
+    error_invalid_state
 };
 
 }

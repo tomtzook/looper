@@ -107,7 +107,7 @@ looper::error create(
     file** file_out,
     const std::string_view path,
     const open_mode mode,
-    const file_attributes attributes) {
+    const file_attributes attributes) noexcept {
     os::descriptor descriptor;
     const auto status = open_file(path, mode, attributes, descriptor);
     if (status != error_success) {
@@ -128,18 +128,18 @@ looper::error create(
     return error_success;
 }
 
-void close(file* file) {
+void close(file* file) noexcept {
     file->closed = true;
     ::close(file->fd);
 
     delete file;
 }
 
-descriptor get_descriptor(const file* file) {
+descriptor get_descriptor(const file* file) noexcept {
     return file->fd;
 }
 
-looper::error seek(file* file, const size_t offset, const seek_whence whence) {
+looper::error seek(file* file, const size_t offset, const seek_whence whence) noexcept {
     if (file->closed) {
         return error_fd_closed;
     }
@@ -153,7 +153,7 @@ looper::error seek(file* file, const size_t offset, const seek_whence whence) {
     return error_success;
 }
 
-looper::error tell(const file* file, size_t& offset_out) {
+looper::error tell(const file* file, size_t& offset_out) noexcept {
     if (file->closed) {
         return error_fd_closed;
     }
@@ -162,7 +162,7 @@ looper::error tell(const file* file, size_t& offset_out) {
     return error_success;
 }
 
-looper::error read(file* file, uint8_t* buffer, const size_t buffer_size, size_t& read_out) {
+looper::error read(file* file, uint8_t* buffer, const size_t buffer_size, size_t& read_out) noexcept {
     if (file->closed) {
         return error_fd_closed;
     }
@@ -178,7 +178,7 @@ looper::error read(file* file, uint8_t* buffer, const size_t buffer_size, size_t
     return error_success;
 }
 
-looper::error write(file* file, const uint8_t* buffer, const size_t size, size_t& written_out) {
+looper::error write(file* file, const uint8_t* buffer, const size_t size, size_t& written_out) noexcept {
     if (file->closed) {
         return error_fd_closed;
     }

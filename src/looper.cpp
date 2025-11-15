@@ -60,7 +60,7 @@ static void execute_future_internal(const future future, const std::chrono::mill
     looper_trace_info(log_module, "requesting future execution: loop=%lu, handle=%lu, delay=%lu", data.handle, future, delay.count());
 
     auto& future_impl = data.futures[future];
-    future_impl.execute(delay);
+    throw_if_error(future_impl.execute(delay));
 }
 
 static bool wait_for_future_internal(std::unique_lock<std::mutex>& lock, const future future, const std::chrono::milliseconds timeout) {
@@ -243,7 +243,7 @@ void set_event(const event event) {
     looper_trace_debug(log_module, "setting event: loop=%lu, handle=%lu", data.handle, event);
 
     auto& event_impl = data.events[event];
-    event_impl.set();
+    throw_if_error(event_impl.set());
 }
 
 void clear_event(const event event) {
@@ -254,10 +254,9 @@ void clear_event(const event event) {
     looper_trace_debug(log_module, "clearing event: loop=%lu, handle=%lu", data.handle, event);
 
     auto& event_impl = data.events[event];
-    event_impl.clear();
+    throw_if_error(event_impl.clear());
 }
 
-// timers
 timer create_timer(const loop loop, std::chrono::milliseconds timeout, timer_callback&& callback) {
     std::unique_lock lock(get_global_loop_data().mutex);
 
@@ -288,7 +287,7 @@ void start_timer(const timer timer) {
     looper_trace_debug(log_module, "starting timer: loop=%lu, handle=%lu", data.handle, timer);
 
     auto& timer_impl = data.timers[timer];
-    timer_impl.start();
+    throw_if_error(timer_impl.start());
 }
 
 void stop_timer(const timer timer) {

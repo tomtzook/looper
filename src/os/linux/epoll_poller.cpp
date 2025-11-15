@@ -61,7 +61,7 @@ struct poller {
     size_t events_buffer_size;
 };
 
-looper::error create(poller** poller_out) {
+looper::error create(poller** poller_out) noexcept {
     auto* _poller = new (std::nothrow) poller;
     if (_poller == nullptr) {
         return error_allocation;
@@ -88,14 +88,14 @@ looper::error create(poller** poller_out) {
     return error_success;
 }
 
-void close(const poller* poller) {
+void close(const poller* poller) noexcept {
     ::close(poller->fd);
 
     delete[] poller->events;
     delete poller;
 }
 
-looper::error add(const poller* poller, const os::descriptor descriptor, const event_types events) {
+looper::error add(const poller* poller, const os::descriptor descriptor, const event_types events) noexcept {
     epoll_event event{};
     event.events = events_to_native(events);
     event.data.fd = descriptor;
@@ -107,7 +107,7 @@ looper::error add(const poller* poller, const os::descriptor descriptor, const e
     return error_success;
 }
 
-looper::error set(const poller* poller, const os::descriptor descriptor, const event_types events) {
+looper::error set(const poller* poller, const os::descriptor descriptor, const event_types events) noexcept {
     epoll_event event{};
     event.events = events_to_native(events);
     event.data.fd = descriptor;
@@ -119,7 +119,7 @@ looper::error set(const poller* poller, const os::descriptor descriptor, const e
     return error_success;
 }
 
-looper::error remove(const poller* poller, const os::descriptor descriptor) {
+looper::error remove(const poller* poller, const os::descriptor descriptor) noexcept {
     epoll_event event{};
     event.events = 0;
     event.data.fd = descriptor;
@@ -135,7 +135,7 @@ looper::error poll(poller* poller,
     const size_t max_events,
     const std::chrono::milliseconds timeout,
     event_data* events,
-    size_t& event_count) {
+    size_t& event_count) noexcept {
     if (max_events > poller->events_buffer_size) {
         auto* _events = new (std::nothrow) epoll_event[max_events];
         if (_events == nullptr) {

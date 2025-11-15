@@ -20,11 +20,11 @@ future::~future() {
     m_loop->remove_future(&m_loop_data);
 }
 
-void future::execute(const std::chrono::milliseconds delay) {
+looper::error future::execute(const std::chrono::milliseconds delay) {
     auto lock = m_loop->lock_loop();
 
     if (!m_loop_data.finished) {
-        throw std::runtime_error("future already queued for execution");
+        return error_already_queued;
     }
 
     m_loop_data.finished = false;
@@ -39,6 +39,8 @@ void future::execute(const std::chrono::milliseconds delay) {
     if (delay.count() < 1) {
         m_loop->signal_run();
     }
+
+    return error_success;
 }
 
 bool future::wait_for(std::unique_lock<std::mutex>& lock, const std::chrono::milliseconds timeout) {

@@ -17,14 +17,14 @@ event::event(const looper::event handle, const loop_ptr& loop, event_callback&& 
         std::bind_front(&event::handle_events, this));
 }
 
-void event::set() {
+looper::error event::set() {
     auto [lock, control] = m_resource.lock_loop();
-    OS_CHECK_THROW(os::event_set(m_event_obj));
+    return os::event_set(m_event_obj);
 }
 
-void event::clear() {
+looper::error event::clear() {
     auto [lock, control] = m_resource.lock_loop();
-    OS_CHECK_THROW(os::event_clear(m_event_obj));
+    return os::event_clear(m_event_obj);
 }
 
 void event::handle_events(std::unique_lock<std::mutex>& lock, const loop_resource::control&, event_types) const {

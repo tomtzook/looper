@@ -169,8 +169,6 @@ concept os_object_type = std::is_same_v<t_, event> || std::is_same_v<t_, tcp> ||
 #endif
     ;
 
-using streamable_type = std::variant<tcp>;
-
 template<os_object_type t_>
 struct os_descriptor;
 template<os_object_type t_>
@@ -179,6 +177,11 @@ template<os_object_type t_>
 struct os_socket_server;
 template<os_object_type t_>
 struct os_stream;
+
+template<typename t_>
+concept connectable_socket_type = requires(t_ t, const t_& f1_type) {
+    { os_socket<t_>::finalize_connect(f1_type) } -> std::same_as<looper::error>;
+};
 
 template<>
 struct os_descriptor<event> {
