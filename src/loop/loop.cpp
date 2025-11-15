@@ -33,7 +33,7 @@ loop::loop(const looper::loop handle) noexcept
     add_resource(os::get_descriptor(m_run_loop_event),
                  event_type::in,
                  [this](resource, void*, event_type)->void {
-                     os::event_clear(m_run_loop_event);
+                     ABORT_IF_ERROR(os::event_clear(m_run_loop_event));
                  });
 }
 

@@ -1,6 +1,4 @@
 
-#ifdef LOOPER_UNIX_SOCKETS
-
 #include "looper_base.h"
 
 namespace looper {
@@ -162,5 +160,3 @@ unix_socket accept_unix_socket(const unix_socket_server unix_socket) {
 }
 
 }
-
-#endif

@@ -36,7 +36,7 @@ looper::run_forever(loop);
 looper::exec_in_thread(loop);
 ```
 
-All objects (including) loops are referred to with handles returned by calls.
+All objects (including loops) are referred to with handles returned by calls.
 These handles are just references, and do not hold any information or capabilities on their own.
 
 Once done, the loop can be destroyed to clear it and all remaining objects.
