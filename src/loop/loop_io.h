@@ -40,7 +40,7 @@ concept connectable_io_type = io_type<t_, wr_t_, rd_t_> && requires(t_ t) {
 struct io_control {
     io_control(resource_state& state, loop_resource::control resource_control);
 
-    void request_events(event_types events, events_update_type type) const;
+    void request_events(event_type events, events_update_type type) const;
     void invoke_in_loop(loop_callback&& callback) const;
 
     template<typename... args_>
@@ -137,7 +137,7 @@ public:
     void close();
 
 private:
-    void handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control& control, event_types events);
+    void handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control& control, event_type events);
 
     base m_base;
 };
@@ -170,7 +170,7 @@ looper::error base_io<t_wr_, t_rd_, t_io_>::start_read(read_callback&& callback)
     looper_trace_info(loop_io_log_module, "io starting read: handle=%lu", m_handle);
 
     m_read_callback = callback;
-    control.request_events(event_in, events_update_type::append);
+    control.request_events(event_type::in, events_update_type::append);
     m_state.set_reading(true);
 
     return error_success;
@@ -187,7 +187,7 @@ looper::error base_io<t_wr_, t_rd_, t_io_>::stop_read() {
     looper_trace_info(loop_io_log_module, "io stopping read: handle=%lu", m_handle);
 
     m_state.set_reading(false);
-    control.request_events(event_in, events_update_type::remove);
+    control.request_events(event_type::in, events_update_type::remove);
 
     return error_success;
 }
@@ -202,7 +202,7 @@ looper::error base_io<t_wr_, t_rd_, t_io_>::write(write_request&& request) {
     m_write_requests.push_back(std::move(request));
 
     if (!m_write_pending) {
-        control.request_events(event_out, events_update_type::append);
+        control.request_events(event_type::out, events_update_type::append);
         m_write_pending = true;
     }
 
@@ -220,7 +220,7 @@ void base_io<t_wr_, t_rd_, t_io_>::close() {
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
 void base_io<t_wr_, t_rd_, t_io_>::handle_read(std::unique_lock<std::mutex>& lock, const loop_resource::control& control) {
     if (!m_state.is_reading() || m_state.is_errored() || !m_state.can_read()) {
-        control.request_events(event_in, events_update_type::remove);
+        control.request_events(event_type::in, events_update_type::remove);
         return;
     }
 
@@ -244,18 +244,18 @@ void base_io<t_wr_, t_rd_, t_io_>::handle_read(std::unique_lock<std::mutex>& loc
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
 void base_io<t_wr_, t_rd_, t_io_>::handle_write(std::unique_lock<std::mutex>& lock, const loop_resource::control& control) {
     if (!m_write_pending || m_state.is_errored() || !m_state.can_write()) {
-        control.request_events(event_out, events_update_type::remove);
+        control.request_events(event_type::out, events_update_type::remove);
         return;
     }
 
     if (!do_write()) {
         m_state.mark_errored();
         m_write_pending = false;
-        control.request_events(event_out, events_update_type::remove);
+        control.request_events(event_type::out, events_update_type::remove);
     } else {
         if (m_write_requests.empty()) {
             m_write_pending = false;
-            control.request_events(event_out, events_update_type::remove);
+            control.request_events(event_type::out, events_update_type::remove);
         }
     }
 
@@ -266,7 +266,7 @@ template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t
 void base_io<t_wr_, t_rd_, t_io_>::handle_connect(std::unique_lock<std::mutex>& lock, const loop_resource::control& control) requires connectable_io_type<t_io_, t_wr_, t_rd_> {
     // finish connect
     const auto error = m_io.finalize_connect();
-    control.request_events(event_out, events_update_type::remove);
+    control.request_events(event_type::out, events_update_type::remove);
     on_connect_done(lock, control, error);
 }
 
@@ -368,7 +368,7 @@ void io<t_wr_, t_rd_, t_io_>::register_to_loop() {
     auto [lock, control] = m_base.m_resource.lock_loop();
     control.attach_to_loop(
         m_base.m_io.get_descriptor(),
-        0,
+        event_type::none,
         std::bind_front(&io::handle_events, this));
 }
 
@@ -408,7 +408,7 @@ looper::error io<t_wr_, t_rd_, t_io_>::connect(connector&& connector, connect_ca
     } else if (error == error_in_progress) {
         // wait for connection finish
         m_base.m_connection_pending = true;
-        control.request_events(event_out, events_update_type::append);
+        control.request_events(event_type::out, events_update_type::append);
         looper_trace_info(loop_io_log_module, "socket connection not finished: handle=%lu", m_base.m_handle);
     } else {
         m_base.on_connect_done(lock, control, error);
@@ -438,24 +438,24 @@ void io<t_wr_, t_rd_, t_io_>::close() {
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
-void io<t_wr_, t_rd_, t_io_>::handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control& control, const event_types events) {
-    if (m_base.m_state.is_errored() && (events & (event_error | event_hung)) != 0) {
-        control.request_events(0, events_update_type::override);
+void io<t_wr_, t_rd_, t_io_>::handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control& control, const event_type events) {
+    if (m_base.m_state.is_errored() && (events & (event_type::error | event_type::hung)) != 0) {
+        control.request_events(event_type::none, events_update_type::override);
         control.detach_from_loop();
         return;
     }
 
     if (m_base.m_connection_pending) {
-        if ((events & event_out) != 0) {
+        if ((events & event_type::out) != 0) {
             m_base.handle_connect(lock, control);
         }
     } else {
-        if ((events & event_in) != 0) {
+        if ((events & event_type::in) != 0) {
             // new data
             m_base.handle_read(lock, control);
         }
 
-        if ((events & event_out) != 0) {
+        if ((events & event_type::out) != 0) {
             m_base.handle_write(lock, control);
         }
     }

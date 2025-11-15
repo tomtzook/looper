@@ -39,15 +39,15 @@ class loop_resource {
 public:
     class control final {
     public:
-        using handle_events_func = std::function<void(std::unique_lock<std::mutex>&, control&, event_types events)>;
+        using handle_events_func = std::function<void(std::unique_lock<std::mutex>&, control&, event_type events)>;
 
         control(loop_ptr loop, looper::impl::resource& resource);
 
         [[nodiscard]] looper::impl::resource handle() const;
 
-        void attach_to_loop(os::descriptor descriptor, event_types events, handle_events_func&& handle_events);
+        void attach_to_loop(os::descriptor descriptor, event_type events, handle_events_func&& handle_events);
         void detach_from_loop();
-        void request_events(event_types events, events_update_type type) const;
+        void request_events(event_type events, events_update_type type) const;
         void invoke_in_loop(loop_callback&& callback) const;
 
         template<typename... args_>

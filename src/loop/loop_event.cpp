@@ -13,7 +13,7 @@ event::event(const looper::event handle, const loop_ptr& loop, event_callback&& 
     auto [lock, control] = m_resource.lock_loop();
     control.attach_to_loop(
         os::get_descriptor(m_event_obj),
-        event_in,
+        event_type::in,
         std::bind_front(&event::handle_events, this));
 }
 
@@ -27,7 +27,7 @@ looper::error event::clear() {
     return os::event_clear(m_event_obj);
 }
 
-void event::handle_events(std::unique_lock<std::mutex>& lock, const loop_resource::control&, event_types) const {
+void event::handle_events(std::unique_lock<std::mutex>& lock, const loop_resource::control&, event_type) const {
     invoke_func(lock, "event_callback", m_callback, m_handle);
 }
 

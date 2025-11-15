@@ -69,14 +69,14 @@ looper::impl::resource loop_resource::control::handle() const {
     return m_resource;
 }
 
-void loop_resource::control::attach_to_loop(const os::descriptor descriptor, const event_types events, handle_events_func&& handle_events) {
+void loop_resource::control::attach_to_loop(const os::descriptor descriptor, const event_type events, handle_events_func&& handle_events) {
     if (m_resource != empty_handle) {
         throw std::runtime_error("already attached as resource");
     }
 
     auto loop = m_loop;
     m_resource = m_loop->add_resource(descriptor, events, [loop, handle_events](
-        resource resource, void*, const event_types events_act)->void {
+        resource resource, void*, const event_type events_act)->void {
         if (resource == empty_handle) {
             return;
         }
@@ -94,7 +94,7 @@ void loop_resource::control::detach_from_loop() {
     }
 }
 
-void loop_resource::control::request_events(const event_types events, const events_update_type type) const {
+void loop_resource::control::request_events(const event_type events, const events_update_type type) const {
     m_loop->request_resource_events(m_resource, events, type);
 }
 

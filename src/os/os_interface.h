@@ -134,7 +134,7 @@ namespace poll {
 
 struct event_data {
     os::descriptor descriptor;
-    event_types events;
+    event_type events;
 };
 
 struct poller;
@@ -142,8 +142,8 @@ struct poller;
 looper::error create(poller** poller_out) noexcept;
 void close(const poller* poller) noexcept;
 
-looper::error add(const poller* poller, os::descriptor descriptor, event_types events) noexcept;
-looper::error set(const poller* poller, os::descriptor descriptor, event_types events) noexcept;
+looper::error add(const poller* poller, os::descriptor descriptor, event_type events) noexcept;
+looper::error set(const poller* poller, os::descriptor descriptor, event_type events) noexcept;
 looper::error remove(const poller* poller, os::descriptor descriptor) noexcept;
 
 looper::error poll(poller* poller, size_t max_events, std::chrono::milliseconds timeout, event_data* events, size_t& event_count) noexcept;

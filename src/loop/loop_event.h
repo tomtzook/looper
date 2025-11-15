@@ -13,7 +13,7 @@ public:
     looper::error clear();
 
 private:
-    void handle_events(std::unique_lock<std::mutex>& lock, const loop_resource::control& control, event_types events) const;
+    void handle_events(std::unique_lock<std::mutex>& lock, const loop_resource::control& control, event_type events) const;
 
     looper::event m_handle;
     os::event m_event_obj;

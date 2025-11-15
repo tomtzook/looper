@@ -7,7 +7,7 @@ namespace looper::impl {
 
 #define log_module loop_log_module
 
-constexpr event_types must_have_events = event_error | event_hung;
+constexpr event_type must_have_events = event_type::error | event_type::hung;
 constexpr auto exec_later_wait_timeout = std::chrono::milliseconds(5000);
 
 loop::loop(const looper::loop handle)
@@ -35,8 +35,8 @@ loop::loop(const looper::loop handle)
     looper_trace_info(log_module, "creating loop: handle=%lu", m_handle);
 
     add_resource(os::get_descriptor(m_run_loop_event),
-                 event_in,
-                 [this](resource, void*, event_types)->void {
+                 event_type::in,
+                 [this](resource, void*, event_type)->void {
                      os::event_clear(m_run_loop_event);
                  });
 }
@@ -68,7 +68,7 @@ std::unique_lock<std::mutex> loop::lock_loop() {
 
 resource loop::add_resource(
     os::descriptor descriptor,
-    const event_types events,
+    const event_type events,
     resource_callback&& callback,
     void* user_ptr) {
     auto [lock, _1] = lock_if_needed();
@@ -81,7 +81,7 @@ resource loop::add_resource(
     auto [handle, data] = m_resource_table.allocate_new();
     data->user_ptr = user_ptr;
     data->descriptor = descriptor;
-    data->events = 0;
+    data->events = event_type::none;
     data->callback = std::move(callback);
 
     looper_trace_debug(log_module, "adding resource: loop=%lu, handle=%lu, fd=%u", m_handle, handle, descriptor);
@@ -111,7 +111,7 @@ void loop::remove_resource(const resource resource) {
 
 void loop::request_resource_events(
     const resource resource,
-    const event_types events,
+    const event_type events,
     const events_update_type type) {
     auto [lock, _] = lock_if_needed();
 
@@ -435,10 +435,10 @@ void loop::process_events(std::unique_lock<std::mutex>& lock, const size_t event
 
         const auto* resource_data = it->second;
 
-        if ((current_event_data.events & (event_error | event_hung)) != 0) {
+        if ((current_event_data.events & (event_type::error | event_type::hung)) != 0) {
             // we got an error on the resource, push it into the resource handler by marking
             // other flags as active and let the syscalls handle it then
-            current_event_data.events |= resource_data->events & (event_out | event_in);
+            current_event_data.events |= resource_data->events & (event_type::out | event_type::in);
         }
 
         const auto adjusted_flags = (resource_data->events & current_event_data.events);

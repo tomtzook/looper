@@ -19,37 +19,37 @@ static looper::error create_epoll(os::descriptor& descriptor_out) {
     return error_success;
 }
 
-static uint32_t events_to_native(const event_types events) {
+static uint32_t events_to_native(const event_type events) {
     uint32_t r_events = 0;
-    if ((events & event_type::event_in) != 0) {
+    if ((events & event_type::in) != 0) {
         r_events |= EPOLLIN;
     }
-    if ((events & event_type::event_out) != 0) {
+    if ((events & event_type::out) != 0) {
         r_events |= EPOLLOUT;
     }
-    if ((events & event_type::event_error) != 0) {
+    if ((events & event_type::error) != 0) {
         r_events |= EPOLLERR;
     }
-    if ((events & event_type::event_hung) != 0) {
+    if ((events & event_type::hung) != 0) {
         r_events |= EPOLLHUP;
     }
 
     return r_events;
 }
 
-static event_types native_to_events(const uint32_t events) {
-    event_types r_events = 0;
+static event_type native_to_events(const uint32_t events) {
+    auto r_events = event_type::none;
     if ((events & EPOLLIN) != 0) {
-        r_events |= event_type::event_in;
+        r_events |= event_type::in;
     }
     if ((events & EPOLLOUT) != 0) {
-        r_events |= event_type::event_out;
+        r_events |= event_type::out;
     }
     if ((events & EPOLLERR) != 0) {
-        r_events |= event_type::event_error;
+        r_events |= event_type::error;
     }
     if ((events & EPOLLHUP) != 0) {
-        r_events |= event_type::event_hung;
+        r_events |= event_type::hung;
     }
 
     return r_events;
@@ -95,7 +95,7 @@ void close(const poller* poller) noexcept {
     delete poller;
 }
 
-looper::error add(const poller* poller, const os::descriptor descriptor, const event_types events) noexcept {
+looper::error add(const poller* poller, const os::descriptor descriptor, const event_type events) noexcept {
     epoll_event event{};
     event.events = events_to_native(events);
     event.data.fd = descriptor;
@@ -107,7 +107,7 @@ looper::error add(const poller* poller, const os::descriptor descriptor, const e
     return error_success;
 }
 
-looper::error set(const poller* poller, const os::descriptor descriptor, const event_types events) noexcept {
+looper::error set(const poller* poller, const os::descriptor descriptor, const event_type events) noexcept {
     epoll_event event{};
     event.events = events_to_native(events);
     event.data.fd = descriptor;

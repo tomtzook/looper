@@ -332,7 +332,7 @@ inline looper::error event_clear(const event& obj) {
     return interface::event::clear(obj);
 }
 
-inline looper::error poller_add(const poller& obj, const os::descriptor descriptor, const event_types events) {
+inline looper::error poller_add(const poller& obj, const os::descriptor descriptor, const event_type events) {
     return interface::poll::add(obj, descriptor, events);
 }
 
@@ -340,7 +340,7 @@ inline looper::error poller_remove(const poller& obj, const os::descriptor descr
     return interface::poll::remove(obj, descriptor);
 }
 
-inline looper::error poller_set(const poller& obj, const os::descriptor descriptor, const event_types events) {
+inline looper::error poller_set(const poller& obj, const os::descriptor descriptor, const event_type events) {
     return interface::poll::set(obj, descriptor, events);
 }
 

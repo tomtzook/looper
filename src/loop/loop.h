@@ -22,7 +22,7 @@ namespace looper::impl {
 class loop;
 
 using resource = handle;
-using resource_callback = std::function<void(resource, void*, event_types)>;
+using resource_callback = std::function<void(resource, void*, event_type)>;
 using execute_callback = std::function<looper::error()>;
 using loop_callback = std::function<void()>;
 using loop_timer_callback = std::function<void()>;
@@ -72,14 +72,14 @@ struct resource_data {
         : our_handle(handle)
         , user_ptr(nullptr)
         , descriptor(-1)
-        , events(0)
+        , events(event_type::none)
         , callback(nullptr)
     {}
 
     resource our_handle;
     void* user_ptr;
     os::descriptor descriptor;
-    event_types events;
+    event_type events;
     resource_callback callback;
 };
 
@@ -93,7 +93,7 @@ struct update {
 
     resource handle;
     update_type type;
-    event_types events;
+    event_type events;
 };
 
 struct execute_request {
@@ -119,11 +119,11 @@ public:
     std::unique_lock<std::mutex> lock_loop();
 
     resource add_resource(os::descriptor descriptor,
-                          event_types events,
+                          event_type events,
                           resource_callback&& callback,
                           void* user_ptr = nullptr);
     void remove_resource(resource resource);
-    void request_resource_events(resource resource, event_types events, events_update_type type);
+    void request_resource_events(resource resource, event_type events, events_update_type type);
 
     void add_future(future_data* data);
     void remove_future(future_data* data);

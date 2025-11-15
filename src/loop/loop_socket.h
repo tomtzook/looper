@@ -104,7 +104,7 @@ public:
     void close();
 
 private:
-    void handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control& control, event_types events) const;
+    void handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control& control, event_type events) const;
 
     looper::handle m_handle;
     loop_ptr m_loop;
@@ -229,7 +229,7 @@ socket_server<t_, t_client_, bind_func_>::socket_server(const looper::handle han
     auto [lock, control] = m_resource.lock_loop();
     control.attach_to_loop(
         os::get_descriptor(m_socket_obj),
-        0,
+        event_type::none,
         std::bind_front(&socket_server::handle_events, this));
 }
 
@@ -250,7 +250,7 @@ looper::error socket_server<t_, t_client_, bind_func_>::listen(size_t backlog, l
     }
 
     m_callback = callback;
-    control.request_events(event_in, events_update_type::append);
+    control.request_events(event_type::in, events_update_type::append);
 
     return error_success;
 }
@@ -277,8 +277,8 @@ void socket_server<t_, t_client_, bind_func_>::close() {
 }
 
 template<os::os_stream_type t_, typename t_client_, typename bind_func_>
-void socket_server<t_, t_client_, bind_func_>::handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control&, const event_types events) const {
-    if ((events & event_in) != 0) {
+void socket_server<t_, t_client_, bind_func_>::handle_events(std::unique_lock<std::mutex>& lock, loop_resource::control&, const event_type events) const {
+    if ((events & event_type::in) != 0) {
         // new data
         invoke_func(lock, "tcp_server_callback", m_callback, m_handle);
     }
