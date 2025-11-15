@@ -16,20 +16,24 @@ bool resource_state::is_errored() const {
     return m_is_errored;
 }
 
-void resource_state::verify_not_errored() const {
+looper::error resource_state::verify_not_errored() const {
     if (m_is_errored) {
-        throw std::runtime_error("resource is errored and cannot be used");
+        return error_resource_errored;
     }
+
+    return error_success;
 }
 
 bool resource_state::is_reading() const {
     return m_is_reading;
 }
 
-void resource_state::verify_not_reading() const {
+looper::error resource_state::verify_not_reading() const {
     if (m_is_errored) {
-        throw std::runtime_error("resource is reading");
+        return error_already_reading;
     }
+
+    return error_success;
 }
 
 bool resource_state::can_read() const {

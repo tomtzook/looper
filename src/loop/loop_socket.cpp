@@ -48,39 +48,39 @@ void udp_io::close() {
 }
 
 udp_socket::udp_socket(const looper::handle handle, const loop_ptr& loop)
-    : m_base(io_type(handle, loop, udp_io()), base_type::state::open)
+    : m_io(io_type(handle, loop, udp_io()))
 {}
 
 looper::error udp_socket::bind(const uint16_t port) {
-    auto [lock, control] = m_base.m_io.use();
-    control.state.verify_not_errored();
+    auto [lock, control] = m_io.use();
+    RETURN_IF_ERROR(control.state.verify_not_errored());
 
-    return os::ipv4_bind(m_base.m_io.io_obj().m_obj, port);
+    return os::ipv4_bind(m_io.io_obj().m_obj, port);
 }
 
 looper::error udp_socket::bind(const std::string_view address, const uint16_t port) {
-    auto [lock, control] = m_base.m_io.use();
-    control.state.verify_not_errored();
+    auto [lock, control] = m_io.use();
+    RETURN_IF_ERROR(control.state.verify_not_errored());
 
-    return os::ipv4_bind(m_base.m_io.io_obj().m_obj, address, port);
+    return os::ipv4_bind(m_io.io_obj().m_obj, address, port);
 }
 
 looper::error udp_socket::start_read(udp_read_callback&& callback) {
-    return m_base.m_io.start_read([callback](const looper::handle handle, const udp_read_data& data)->void {
+    return m_io.start_read([callback](const looper::handle handle, const udp_read_data& data)->void {
         callback(handle, data.sender, data.buffer, data.error);
     });
 }
 
 looper::error udp_socket::stop_read() {
-    return m_base.m_io.stop_read();
+    return m_io.stop_read();
 }
 
 looper::error udp_socket::write(udp_write_request&& request) {
-    return m_base.m_io.write(std::move(request));
+    return m_io.write(std::move(request));
 }
 
 void udp_socket::close() {
-    m_base.m_io.close();
+    m_io.close();
 }
 
 }

@@ -90,7 +90,9 @@ enum : error {
     error_already_running,
     error_bad_handle,
     error_no_such_handle,
-    error_invalid_state
+    error_invalid_state,
+    error_resource_errored,
+    error_already_reading
 };
 
 }

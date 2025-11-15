@@ -6,6 +6,15 @@
 #include "looper_trace.h"
 #include "looper_types.h"
 
+
+#define RETURN_IF_ERROR(...) \
+    do { \
+        const auto _err = __VA_ARGS__; \
+        if (_err) { \
+            return _err; \
+        } \
+    } while (0)
+
 namespace looper {
 
 #define cbinvoke_log_module "callback_invoke"
