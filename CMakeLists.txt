@@ -21,7 +21,7 @@ endif ()
 
 add_compile_definitions(TRACE_LEVEL=${TRACE_LEVEL} TRACE_SINK=${TRACE_SINK})
 
-file(GLOB INCLUDE_FILES ${CMAKE_SOURCE_DIR}/include/*.h)
+file(GLOB INCLUDE_FILES ${CMAKE_SOURCE_DIR}/include/*.h ${CMAKE_SOURCE_DIR}/include/*.hpp)
 
 set(SOURCES
         include/looper.h

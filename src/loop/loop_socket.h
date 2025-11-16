@@ -267,8 +267,8 @@ template<os::os_stream_type t_, typename t_client_, typename bind_func_>
 void socket_server<t_, t_client_, bind_func_>::close() noexcept {
     auto [lock, control] = m_resource.lock_loop();
 
-    m_socket_obj.close();
     control.detach_from_loop();
+    m_socket_obj.close();
 }
 
 template<os::os_stream_type t_, typename t_client_, typename bind_func_>
