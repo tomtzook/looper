@@ -202,8 +202,8 @@ template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t
 void base_io<t_wr_, t_rd_, t_io_>::close() noexcept {
     auto [lock, control] = m_resource.lock_loop();
 
-    m_io.close();
     control.detach_from_loop();
+    m_io.close();
 }
 
 template<write_request_type t_wr_, read_data_type t_rd_, io_type<t_wr_, t_rd_> t_io_>
