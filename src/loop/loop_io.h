@@ -268,6 +268,7 @@ void base_io<t_wr_, t_rd_, t_io_>::on_connect_done(
     const loop_resource::control& control,
     const error error) noexcept
     requires connectable_io_type<t_io_, t_wr_, t_rd_> {
+    m_connection_pending = false;
     if (error == error_success) {
         // connection finished
         looper_trace_info(loop_io_log_module, "connected tcp: handle=%lu", m_handle);
